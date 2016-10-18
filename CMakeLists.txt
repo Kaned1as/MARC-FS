@@ -2,6 +2,10 @@ project(MailFuse)
 cmake_minimum_required(VERSION 2.8)
 aux_source_directory(. SRC_LIST)
 
+# C++ standard
+set (CMAKE_CXX_STANDARD 14)
+
+# modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 
 # FUSE
@@ -18,3 +22,4 @@ ADD_SUBDIRECTORY(contrib/curlcpp)
 INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
+target_link_libraries(${PROJECT_NAME} curlcpp)
