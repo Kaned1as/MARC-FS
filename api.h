@@ -4,6 +4,7 @@
 #include "account.h"
 
 #include "curl_easy.h"
+#include "curl_cookie.h"
 
 #include <memory>
 
@@ -23,7 +24,10 @@ public:
      */
     bool login(const Account& acc);
 private:
+    bool obtainCloudCookie();
+
     std::unique_ptr<curl::curl_easy> m_client;
+    curl::curl_cookie m_cookies;
 };
 
 #endif // API_H
