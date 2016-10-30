@@ -24,7 +24,11 @@ public:
      */
     bool login(const Account& acc);
 private:
+    bool authenticate(const Account &acc);
     bool obtainCloudCookie();
+    bool obtainAuthToken();
+
+    std::string m_token;
 
     std::unique_ptr<curl::curl_easy> m_client;
     curl::curl_cookie m_cookies;

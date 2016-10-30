@@ -21,5 +21,14 @@ endif()
 ADD_SUBDIRECTORY(contrib/curlcpp)
 INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
 
+# JSONCPP
+find_package(JSONCPP REQUIRED)
+if (NOT JSONCPP_FOUND)
+    message(SEND_ERROR "Failed to find jsoncpp")
+    return()
+else()
+    include_directories(${JSONCPP_INCLUDE_DIR})
+endif()
+
 add_executable(${PROJECT_NAME} ${SRC_LIST})
-target_link_libraries(${PROJECT_NAME} curlcpp)
+target_link_libraries(${PROJECT_NAME} curlcpp jsoncpp)
