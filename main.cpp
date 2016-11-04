@@ -15,6 +15,7 @@ int main(int argc, char *argv[])
 
     API api;
     api.login(acc);
+    api.upload("", "");
 
     return 0;
 }

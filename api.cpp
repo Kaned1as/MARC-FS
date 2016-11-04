@@ -3,6 +3,9 @@
 
 #include "api.h"
 
+#include <numeric>
+#include <iterator>
+
 #include <json/json.h>
 
 #define NV_PAIR(name, value) curl_pair<CURLformoption, std::string>(CURLFORM_COPYNAME, name), \
@@ -17,12 +20,48 @@ static const std::string AUTH_ENDPOINT = AUTH_DOMAIN + "/cgi-bin/auth";
 static const std::string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
 static const std::string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
 
+static const std::string SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
+
+static const long MAX_FILE_SIZE = 2L * 1000L * 1000L * 1000L;
+
 using curl::curl_easy;
 using curl::curl_pair;
 using curl::curl_header;
 using curl::curl_form;
 using curl::curl_cookie;
 using curl::curl_ios;
+
+struct MailApiException : public std::exception {
+    MailApiException(std::string reason) : reason(reason) {}
+
+    std::string reason;
+
+    virtual const char *what() const noexcept override;
+};
+
+const char *MailApiException::what() const noexcept
+{
+    return reason.c_str();
+}
+
+std::string API::paramString(Params const &params)
+{
+    if(params.empty())
+        return "";
+
+    std::vector<std::string> result;
+    result.reserve(params.size());
+    for (auto it = params.cbegin(); it != params.end(); ++it) {
+        std::string name = it->first, value = it->second;
+        m_client->escape(name);
+        m_client->escape(value);
+        result.push_back(name + "=" + value);
+    }
+
+    std::stringstream s;
+    std::copy(result.cbegin(), result.cend(), std::ostream_iterator<std::string>(s, "&"));
+    return s.str();
+}
 
 API::API()
     : m_client(std::make_unique<curl::curl_easy>()),
@@ -159,4 +198,53 @@ bool API::obtainAuthToken()
     }
 
     return false;
+}
+
+Shard API::obtainShard()
+{
+    curl_header header;
+    header.add("Accept: application/json");
+
+    std::ostringstream stream;
+    curl_ios<std::ostringstream> writer(stream);
+
+    std::string url = SHARD_ENDPOINT + "?" + paramString({{"token", m_token}});
+    m_client->add<CURLOPT_URL>(url.data());
+    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    m_client->add<CURLOPT_HTTPHEADER>(header.get());
+    m_client->add<CURLOPT_WRITEFUNCTION>(writer.get_function());
+    m_client->add<CURLOPT_WRITEDATA>(writer.get_stream());
+    try {
+        m_client->perform();
+    } catch (curl::curl_easy_exception error) {
+        curl::curlcpp_traceback errors = error.get_traceback();
+        error.print_traceback();
+        throw MailApiException("Couldn't perform http request for obtaining shard");
+    }
+
+    int64_t ret = m_client->get_info<CURLINFO_RESPONSE_CODE>().get();
+    if (ret != 302 && ret != 200) // OK or redirect
+        throw MailApiException("Error code for shard response");
+
+    using Json::Value;
+
+    Value response;
+    Json::Reader reader;
+    std::cout << std::endl << stream.str();
+
+    if (!reader.parse(stream.str(), response)) // invalid JSON (shouldn't happen)
+        throw MailApiException("Error parsing shard response JSON");
+
+    if (response["body"] != Value() && response["body"]["token"] != Value()) {
+        m_token = response["body"]["token"].asString();
+        return Shard();
+    }
+
+    return Shard();
+}
+
+
+void API::upload(std::string path, std::string remote_path)
+{
+    Shard s = obtainShard();
 }
