@@ -3,6 +3,7 @@
 
 #include "account.h"
 #include "api_shard.h"
+#include "api_cloudfile.h"
 
 #include "curl_easy.h"
 #include "curl_cookie.h"
@@ -37,6 +38,13 @@ public:
      * @param remote_path new directory absolute path (e.g. /home/newfolder)
      */
     void mkdir(string remote_path);
+
+    /**
+     * @brief ls list entries in a directory
+     * @param remote_path absolute path to directory to list
+     * @return vector of file items
+     */
+    vector<CloudFile> ls(string remote_path);
 private:
 
     // api helpers

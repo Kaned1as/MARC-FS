@@ -25,8 +25,9 @@ static const string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
 
 static const string SCLD_SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
 static const string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
+static const string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
 static const string SCLD_ADDFILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file/add";
-static const string SCLD_ADDFOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder/add";
+static const string SCLD_ADDFOLDER_ENDPOINT = CLOUD_DOMAIN + SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1000L * 1000L * 1000L;
 
@@ -152,6 +153,10 @@ string API::performPost(bool reset)
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
 
+    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    m_client->add<CURLOPT_VERBOSE>(1L);
+    m_client->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+
     m_client->add<CURLOPT_WRITEFUNCTION>(writer.get_function());
     m_client->add<CURLOPT_WRITEDATA>(writer.get_stream());
     try {
@@ -255,7 +260,6 @@ bool API::obtainAuthToken()
     curl_header header;
     header.add("Accept: application/json");
     
-    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
     m_client->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
     string answer = performPost();
@@ -283,7 +287,6 @@ Shard API::obtainShard(Shard::ShardType type)
 
     string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", m_token}});
     m_client->add<CURLOPT_URL>(url.data());
-    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
     string answer = performPost();
 
@@ -326,11 +329,8 @@ void API::addUploadedFile(string name, string remote_dir, string hash_size)
 
     m_client->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
     m_client->add<CURLOPT_FOLLOWLOCATION>(1L);
-    m_client->add<CURLOPT_VERBOSE>(1L);
-    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
     m_client->add<CURLOPT_POSTFIELDS>(post_fields.data());
-    m_client->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     performPost();
 }
 
@@ -355,11 +355,8 @@ void API::upload(string path, string remote_dir)
 
     m_client->add<CURLOPT_URL>(upload_url.data());
     m_client->add<CURLOPT_FOLLOWLOCATION>(1L);
-    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     m_client->add<CURLOPT_HTTPPOST>(name_form.get());
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
-    m_client->add<CURLOPT_VERBOSE>(1L);
-    m_client->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     string answer = performPost();
 
     addUploadedFile(filename, remote_dir, answer);
@@ -383,10 +380,24 @@ void API::mkdir(string remote_path)
 
     m_client->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
     m_client->add<CURLOPT_FOLLOWLOCATION>(1L);
-    m_client->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
     m_client->add<CURLOPT_POSTFIELDS>(post_fields.data());
-    m_client->add<CURLOPT_VERBOSE>(1L);
-    m_client->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     performPost();
+}
+
+vector<CloudFile> API::ls(string remote_path)
+{
+    curl_header header;
+    header.add("Accept: application/json");
+
+    string get_fields = paramString({
+        {"token", m_token},
+        {"home", remote_path}
+    });
+
+    m_client->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + get_fields).data());
+    m_client->add<CURLOPT_FOLLOWLOCATION>(1L);
+    m_client->add<CURLOPT_HTTPHEADER>(header.get());
+    std::string answerJson = performPost();
+    return vector<CloudFile>();
 }
