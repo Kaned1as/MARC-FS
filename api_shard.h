@@ -40,11 +40,11 @@ public:
     Shard(const Json::Value &shardEntity);
 
     const std::string& getUrl() const;
-    const uint32_t& getCount() const;
+    const int& getCount() const;
 
 private:
     const std::string url;
-    const uint32_t count;
+    const int count;
 };
 
 #endif // SHARD_H

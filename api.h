@@ -9,13 +9,12 @@
 
 #include <memory>
 
-namespace curl {
-class curl_easy;
-}
+using namespace std;
+using namespace curl;
 
 class API
 {
-    using Params = std::map<std::string, std::string>;
+    using Params = map<string, string>;
 
 public:
     API();
@@ -26,19 +25,48 @@ public:
      * @return true if authenticated successfully, false otherwise.
      */
     bool login(const Account& acc);
-    void upload(std::string path, std::string remote_path);
+    /**
+     * @brief upload uploads the file represented in path to the remote dir represented by remote_path
+     * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
+     * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
+     */
+    void upload(string path, string remote_path);
+
+    /**
+     * @brief mkdir creates a directory noted by remote_path
+     * @param remote_path new directory absolute path (e.g. /home/newfolder)
+     */
+    void mkdir(string remote_path);
 private:
+
+    // api helpers
+
+    // generic
+    /**
+     * @brief obtainShard obtains shard for next operation. It contains url to load-balanced
+     *        host to which request will be sent
+     * @param type type of shard to obtain
+     * @return Shard of selected type
+     * @throws MailApiException in case of non-success return code
+     */
+    Shard obtainShard(Shard::ShardType type);
+
+    // filesystem-related
+    void addUploadedFile(string name, string remote_dir, string hash_size);
+
+    // auth
     bool authenticate(const Account &acc);
     bool obtainCloudCookie();
     bool obtainAuthToken();
 
-    Shard obtainShard();
+    // cURL helpers
+    string paramString(Params const &params);
+    string performPost(bool reset = true);
 
-    std::string paramString(Params const &params);
+    Account m_acc;
+    string m_token;
 
-    std::string m_token;
-
-    std::unique_ptr<curl::curl_easy> m_client;
+    unique_ptr<curl::curl_easy> m_client;
     curl::curl_cookie m_cookies;
 };
 
