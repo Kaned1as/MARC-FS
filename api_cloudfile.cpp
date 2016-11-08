@@ -5,14 +5,34 @@ CloudFile::CloudFile()
 
 }
 
-std::string CloudFile::getPath() const
+CloudFile::Type CloudFile::getType() const
 {
-    return path;
+    return type;
 }
 
-void CloudFile::setPath(const std::string &value)
+void CloudFile::setType(const Type &value)
 {
-    path = value;
+    type = value;
+}
+
+std::string CloudFile::getKind() const
+{
+    return kind;
+}
+
+void CloudFile::setKind(const std::string &value)
+{
+    kind = value;
+}
+
+std::string CloudFile::getHome() const
+{
+    return home;
+}
+
+void CloudFile::setHome(const std::string &value)
+{
+    home = value;
 }
 
 std::string CloudFile::getName() const
@@ -25,6 +45,26 @@ void CloudFile::setName(const std::string &value)
     name = value;
 }
 
+std::string CloudFile::getHash() const
+{
+    return hash;
+}
+
+void CloudFile::setHash(const std::string &value)
+{
+    hash = value;
+}
+
+uint64_t CloudFile::getMtime() const
+{
+    return mtime;
+}
+
+void CloudFile::setMtime(const uint64_t &value)
+{
+    mtime = value;
+}
+
 uint64_t CloudFile::getSize() const
 {
     return size;
@@ -35,12 +75,12 @@ void CloudFile::setSize(const uint64_t &value)
     size = value;
 }
 
-CloudFile::Type CloudFile::getType() const
+std::string CloudFile::getVirusScan() const
 {
-    return type;
+    return virusScan;
 }
 
-void CloudFile::setType(const Type &value)
+void CloudFile::setVirusScan(const std::string &value)
 {
-    type = value;
+    virusScan = value;
 }

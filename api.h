@@ -12,6 +12,7 @@
 
 using namespace std;
 using namespace curl;
+using namespace Json;
 
 class API
 {

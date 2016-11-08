@@ -255,8 +255,6 @@ bool API::obtainCloudCookie()
  */
 bool API::obtainAuthToken()
 {
-    using Json::Value;
-
     curl_header header;
     header.add("Accept: application/json");
     
@@ -265,7 +263,7 @@ bool API::obtainAuthToken()
     string answer = performPost();
 
     Value response;
-    Json::Reader reader;
+    Reader reader;
 
     if (!reader.parse(answer, response)) // invalid JSON (shouldn't happen)
         return false;
@@ -398,6 +396,23 @@ vector<CloudFile> API::ls(string remote_path)
     m_client->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + get_fields).data());
     m_client->add<CURLOPT_FOLLOWLOCATION>(1L);
     m_client->add<CURLOPT_HTTPHEADER>(header.get());
-    std::string answerJson = performPost();
-    return vector<CloudFile>();
+    string answerJson = performPost();
+    cout << answerJson;
+
+    vector<CloudFile> results;
+    Value response;
+    Reader reader;
+
+    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
+        throw MailApiException("Cannot parse JSON ls response!");
+    
+    if (response["body"] == Value() || response["body"]["list"] == Value())
+        throw MailApiException("Non-well formed JSON ls response!");
+
+    Value &list = response["body"]["list"];
+    for (const Value &entry : list) {
+        results.push_back(CloudFile(entry));
+    }
+
+    return results;
 }
