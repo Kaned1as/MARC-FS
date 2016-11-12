@@ -28,24 +28,31 @@ public:
      */
     bool login(const Account& acc);
     /**
-     * @brief upload uploads the file represented in path to the remote dir represented by remote_path
+     * @brief upload uploads the file represented in path to the remote dir represented by remotePath
      * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
      * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
      */
-    void upload(string path, string remote_path);
+    void upload(string path, string remotePath);
 
     /**
-     * @brief mkdir creates a directory noted by remote_path
+     * @brief mkdir creates a directory noted by remotePath
      * @param remote_path new directory absolute path (e.g. /home/newfolder)
      */
-    void mkdir(string remote_path);
+    void mkdir(string remotePath);
 
     /**
      * @brief ls list entries in a directory
      * @param remote_path absolute path to directory to list
      * @return vector of file items
      */
-    vector<CloudFile> ls(string remote_path);
+    vector<CloudFile> ls(string remotePath);
+
+    /**
+     * @brief download download file pointed by remotePath to local path
+     * @param remotePath remote path on cloud server
+     * @param path path on local machine
+     */
+    void download(string remotePath, string path);
 private:
 
     // api helpers
@@ -61,22 +68,23 @@ private:
     Shard obtainShard(Shard::ShardType type);
 
     // filesystem-related
-    void addUploadedFile(string name, string remote_dir, string hash_size);
+    void addUploadedFile(string name, string remoteDir, string hashSize);
 
     // auth
-    bool authenticate(const Account &acc);
-    bool obtainCloudCookie();
-    bool obtainAuthToken();
+    void authenticate();
+    void obtainCloudCookie();
+    void obtainAuthToken();
 
     // cURL helpers
     string paramString(Params const &params);
     string performPost(bool reset = true);
+    vector<uint8_t> performGet();
 
-    Account m_acc;
-    string m_token;
+    Account mAccount;
+    string mToken;
 
-    unique_ptr<curl::curl_easy> m_client;
-    curl::curl_cookie m_cookies;
+    unique_ptr<curl::curl_easy> mClient;
+    curl::curl_cookie mCookies;
 };
 
 #endif // API_H
