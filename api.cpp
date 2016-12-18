@@ -83,19 +83,19 @@ string API::performPost(bool reset)
     return stream.str();
 }
 
-vector<uint8_t> API::performGet()
+vector<int8_t> API::performGet()
 {
-    vector<uint8_t> result;
+    vector<int8_t> result;
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     mClient->add<CURLOPT_VERBOSE>(1L);
     mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     mClient->add<CURLOPT_WRITEDATA>(&result);
     mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<vector<uint8_t>*>(userp);
+        auto result = static_cast<vector<int8_t>*>(userp);
         unsigned char * bytes = static_cast<unsigned char *>(contents);
         const size_t realsize = size * nmemb;
-        vector<uint8_t> data(&bytes[0], &bytes[realsize]);
+        vector<int8_t> data(&bytes[0], &bytes[realsize]);
         result->insert(result->end(), data.begin(), data.end());
         return realsize;
     });
@@ -347,10 +347,9 @@ vector<CloudFile> API::ls(string remotePath)
     return results;
 }
 
-void API::download(string remotePath, string path)
+vector<int8_t> API::download(string remotePath)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
-    vector<uint8_t> bytes = performGet();
-
+    return  performGet();
 }

@@ -9,12 +9,12 @@
  */
 class CloudFile
 {
+public:
     enum Type {
         File,
         Directory
     };
 
-public:
     CloudFile();
     CloudFile(const Json::Value &val) {
         type = val["type"].asString() == "file" ? File : Directory;

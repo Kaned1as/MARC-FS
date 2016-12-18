@@ -52,7 +52,7 @@ public:
      * @param remotePath remote path on cloud server
      * @param path path on local machine
      */
-    void download(string remotePath, string path);
+    vector<int8_t> download(string remotePath);
 private:
 
     // api helpers
@@ -78,7 +78,7 @@ private:
     // cURL helpers
     string paramString(Params const &params);
     string performPost(bool reset = true);
-    vector<uint8_t> performGet();
+    vector<int8_t> performGet();
 
     Account mAccount;
     string mToken;
