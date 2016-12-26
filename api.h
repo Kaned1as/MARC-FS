@@ -8,13 +8,16 @@
 #include "curl_easy.h"
 #include "curl_cookie.h"
 
+#include "blocking_queue.h"
+
 #include <memory>
 
 class API
 {
-    using Params = std::map<std::string, std::string>;
-
 public:
+    using Params = std::map<std::string, std::string>;
+    using Pipe = BlockingQueue<std::vector<int8_t>>;
+
     API();
 
     /**
@@ -28,7 +31,7 @@ public:
      * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
      * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
      */
-    void upload(std::string path, std::string remotePath);
+    void upload(std::vector<int8_t> data, std::string remotePath);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
@@ -73,8 +76,11 @@ private:
 
     // cURL helpers
     std::string paramString(Params const &params);
-    std::string performPost(bool reset = true);
+    std::string performPost();
     std::vector<int8_t> performGet();
+
+    void postAsync(Pipe &p);
+    void getAsync(Pipe &p);
 
     Account mAccount;
     std::string mToken;

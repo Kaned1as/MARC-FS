@@ -59,7 +59,7 @@ string API::paramString(Params const &params)
     return s.str();
 }
 
-string API::performPost(bool reset)
+string API::performPost()
 {
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
@@ -81,10 +81,44 @@ string API::performPost(bool reset)
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
-    if (reset)
-        mClient->reset();
+    mClient->reset();
 
     return stream.str();
+}
+
+void API::postAsync(Pipe &p)
+{
+    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    mClient->add<CURLOPT_VERBOSE>(1L);
+    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+
+    mClient->add<CURLOPT_WRITEDATA>(&p);
+    mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto result = static_cast<Pipe*>(userp);
+        unsigned char * bytes = static_cast<unsigned char *>(contents);
+        const size_t realsize = size * nmemb;
+        vector<int8_t> data(&bytes[0], &bytes[realsize]);
+        result->push(data);
+        return realsize;
+    });
+    try {
+        mClient->perform();
+    } catch (curl::curl_easy_exception error) {
+        curl::curlcpp_traceback errors = error.get_traceback();
+        error.print_traceback();
+        throw MailApiException("Couldn't perform request!");
+    }
+    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
+    if (ret != 302 && ret != 200) // OK or redirect
+        throw MailApiException("non-success return code!");
+
+    mClient->reset();
+    p.markEnd();
+}
+
+void API::getAsync(API::Pipe &p)
+{
+
 }
 
 vector<int8_t> API::performGet()
@@ -267,11 +301,11 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
 }
 
 
-void API::upload(string path, string remotePath)
+void API::upload(std::vector<int8_t> data, string remotePath)
 {
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
 
-    string filename = path.substr(path.find_last_of("/\\") + 1);
+    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", mAccount.login}});
 
     curl_header header;
@@ -280,7 +314,7 @@ void API::upload(string path, string remotePath)
     header.add("Referer: " + CLOUD_DOMAIN + "/home" + remotePath);
 
     curl_form nameForm;
-    nameForm.add(NV_FILEPAIR("file", path)); // fileupload part
+    nameForm.add(NV_FILEPAIR("file", data)); // fileupload part
     nameForm.add(NV_PAIR("_file", filename)); // naming part
 
     curl_form file_form;

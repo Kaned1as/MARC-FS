@@ -9,11 +9,14 @@
 #include "api.h"
 
 struct MruData {
-    MruData() : apiPool(5) {
+
+    MruData() : apiPool(3) {
 
     }
 
-    std::map<std::string, API> enqueuedCalls;
+    std::map<std::string, std::vector<int8_t>> cached;
+    std::map<std::string, bool> dirty;
+    std::map<std::string, API::Pipe> writes;
     ObjectPool<API> apiPool;
 };
 

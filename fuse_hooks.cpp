@@ -1,5 +1,7 @@
 #include "fuse_hooks.h"
 
+#include <cstring>
+
 using namespace std;
 
 int getattr_callback(const char *path, struct stat *stbuf)
@@ -55,6 +57,7 @@ int utime_callback(const char *path, utimbuf *utime)
 
 int open_callback(const char *path, int mode)
 {
+    return 0;
 }
 
 int release_callback(const char *, int mode)
@@ -79,10 +82,40 @@ int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_comp
 
 int read_callback(const char *path, char *buf, size_t size, off_t offset)
 {
+    auto offsetBytes = static_cast<uint64_t>(offset);
+    auto it = fsMetadata.cached.find(path);
+    if (it != fsMetadata.cached.end()) {
+        auto &vec = it->second;
+        auto len = vec.size();
+
+        if (offsetBytes > len)
+            return 0; // requested bytes above the size
+
+        if (offsetBytes + size > len) {
+            // requested size is more than we have
+            memcpy(buf, &vec[0] + offsetBytes, len - offsetBytes);
+            return static_cast<int>(len - offsetBytes);
+        }
+
+        memcpy(buf, &vec[0] + offsetBytes, size);
+        return static_cast<int>(size);
+    }
+
+    auto api = fsMetadata.apiPool.acquire();
+    fsMetadata.cached[path] = api->download(path);
+    return read_callback(path, buf, size, offset);
 }
 
 int write_callback(const char *path, const char *buf, size_t size, off_t offset)
 {
+    fsMetadata.dirty[path] = true;
+    auto &vec = fsMetadata.cached[path];
+    if (offset == 0) {
+        auto data = vector<int8_t>(&buf[0], &buf[size]);
+        vec.insert(vec.end(), data.begin(), data.end());
+        return static_cast<int>(size);
+    }
+
 
 }
 
