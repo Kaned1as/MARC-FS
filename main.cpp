@@ -3,12 +3,11 @@
 
 #include "fuse_hooks.h"
 #include "account.h"
-#include "api.h"
-#include "fscache.h"
+#include "utils.h"
 
 using namespace std;
 
-API api;
+MruData fsMetadata;
 static fuse_operations cloudfs_oper = {};
 
 int main(int argc, char *argv[])
@@ -34,14 +33,11 @@ int main(int argc, char *argv[])
     cloudfs_oper.chmod = nullptr;
     cloudfs_oper.utime = &utime_callback;
 
-    auto cache = FsCache<string, vector<int8_t>>::instance();
-    cache.init();
-
     Account acc;
     acc.setLogin("kairllur@mail.ru");
     acc.setPassword("REDACTED");
 
-    api.login(acc);
+    fsMetadata.apiPool.initialize(&API::login, acc);
 
     //api.upload("863272.jpg", "/home/");
     //api.mkdir("/newfolder");

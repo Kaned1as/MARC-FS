@@ -16,6 +16,10 @@
 #define NV_FILEPAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
     curl_pair<CURLformoption, string>(CURLFORM_FILE, value.c_str())
 
+using namespace std;
+using namespace curl;
+using namespace Json;
+
 static const string SAFE_USER_AGENT = "Mozilla / 5.0(Windows; U; Windows NT 5.1; en - US; rv: 1.9.0.1) Gecko / 2008070208 Firefox / 3.0.1";
 
 static const string AUTH_DOMAIN = "https://auth.mail.ru";

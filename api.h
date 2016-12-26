@@ -10,13 +10,9 @@
 
 #include <memory>
 
-using namespace std;
-using namespace curl;
-using namespace Json;
-
 class API
 {
-    using Params = map<string, string>;
+    using Params = std::map<std::string, std::string>;
 
 public:
     API();
@@ -32,27 +28,27 @@ public:
      * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
      * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
      */
-    void upload(string path, string remotePath);
+    void upload(std::string path, std::string remotePath);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
      * @param remote_path new directory absolute path (e.g. /home/newfolder)
      */
-    void mkdir(string remotePath);
+    void mkdir(std::string remotePath);
 
     /**
      * @brief ls list entries in a directory
      * @param remote_path absolute path to directory to list
      * @return vector of file items
      */
-    vector<CloudFile> ls(string remotePath);
+    std::vector<CloudFile> ls(std::string remotePath);
 
     /**
      * @brief download download file pointed by remotePath to local path
      * @param remotePath remote path on cloud server
      * @param path path on local machine
      */
-    vector<int8_t> download(string remotePath);
+    std::vector<int8_t> download(std::string remotePath);
 private:
 
     // api helpers
@@ -68,7 +64,7 @@ private:
     Shard obtainShard(Shard::ShardType type);
 
     // filesystem-related
-    void addUploadedFile(string name, string remoteDir, string hashSize);
+    void addUploadedFile(std::string name, std::string remoteDir, std::string hashSize);
 
     // auth
     void authenticate();
@@ -76,14 +72,14 @@ private:
     void obtainAuthToken();
 
     // cURL helpers
-    string paramString(Params const &params);
-    string performPost(bool reset = true);
-    vector<int8_t> performGet();
+    std::string paramString(Params const &params);
+    std::string performPost(bool reset = true);
+    std::vector<int8_t> performGet();
 
     Account mAccount;
-    string mToken;
+    std::string mToken;
 
-    unique_ptr<curl::curl_easy> mClient;
+    std::unique_ptr<curl::curl_easy> mClient;
     curl::curl_cookie mCookies;
 };
 

@@ -2,9 +2,9 @@
 #define FUSE_HOOKS_H
 
 #include <fuse.h>
-#include "api.h"
+#include "utils.h"
 
-extern API api;
+extern MruData fsMetadata;
 
 int getattr_callback(const char *path, struct stat *stbuf);
 int statfs_callback(const char *path, struct statfs *stat);

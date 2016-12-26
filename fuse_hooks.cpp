@@ -1,5 +1,6 @@
 #include "fuse_hooks.h"
-#include "fscache.h"
+
+using namespace std;
 
 int getattr_callback(const char *path, struct stat *stbuf)
 {
@@ -18,7 +19,8 @@ int getattr_callback(const char *path, struct stat *stbuf)
 
     string dirname = pathStr.substr(0, slashPos); // /home
     string filename = pathStr.substr(slashPos + 1);
-    auto contents = api.ls(dirname); // actual API call - ls the directory that contains this file
+    auto api = fsMetadata.apiPool.acquire();
+    auto contents = api->ls(dirname); // actual API call - ls the directory that contains this file
     auto file = find_if(contents.cbegin(), contents.cend(), [&](const CloudFile &file) {
         return file.getName() == filename; // now find file in returned results
     });
@@ -53,11 +55,6 @@ int utime_callback(const char *path, utimbuf *utime)
 
 int open_callback(const char *path, int mode)
 {
-    FsCache<string, vector<int8_t>>::instance();
-    fuse_context *ctx = fuse_get_context();
-    string pathStr(path); // e.g. /home/1517.svg
-    ctx->private_data = new vector<int8_t>(api.download(pathStr));
-    return 0; // TODO: caching
 }
 
 int release_callback(const char *, int mode)
@@ -71,7 +68,8 @@ int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_comp
     filler(dirhandle, "..", 0);
 
     string pathStr(path); // e.g. /directory or /
-    auto contents = api.ls(pathStr);
+    auto api = fsMetadata.apiPool.acquire();
+    auto contents = api->ls(pathStr);
     for (CloudFile &cf : contents) {
         filler(dirhandle, cf.getName().data(), 0);
     }
@@ -81,10 +79,6 @@ int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_comp
 
 int read_callback(const char *path, char *buf, size_t size, off_t offset)
 {
-    fuse_context *ctx = fuse_get_context();
-    auto data = reinterpret_cast<vector<int8_t> *>(ctx->private_data);
-    auto start = data->data()[offset];
-
 }
 
 int write_callback(const char *path, const char *buf, size_t size, off_t offset)

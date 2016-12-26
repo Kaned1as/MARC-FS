@@ -4,6 +4,19 @@
 #include <iostream>
 #include <curl_info.h>
 
+#include "thread_pool.h"
+#include "object_pool.h"
+#include "api.h"
+
+struct MruData {
+    MruData() : apiPool(5) {
+
+    }
+
+    std::map<std::string, API> enqueuedCalls;
+    ObjectPool<API> apiPool;
+};
+
 struct MailApiException : public std::exception {
     MailApiException(std::string reason) : reason(reason) {}
 
