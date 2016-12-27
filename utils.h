@@ -10,11 +10,11 @@
 
 struct MruData {
 
-    MruData() : apiPool(3) {
+    MruData() : apiPool(1) {
 
     }
 
-    std::map<std::string, std::vector<int8_t>> cached;
+    std::map<std::string, std::vector<char>> cached;
     std::map<std::string, bool> dirty;
     std::map<std::string, API::Pipe> writes;
     ObjectPool<API> apiPool;

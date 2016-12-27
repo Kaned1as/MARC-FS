@@ -13,9 +13,11 @@ int utime_callback(const char *path, struct utimbuf *utime);
 int open_callback(const char *path, int mode);
 int release_callback(const char *, int mode);
 
+int mknod_callback(const char *path, mode_t mode, dev_t dev);
 int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t filler);
 int read_callback(const char *path, char *buf, size_t size, off_t offset);
 int write_callback(const char *path, const char *buf, size_t size, off_t offset);
+int truncate_callback(const char *path, off_t size);
 int flush_callback(const char *path);
 
 int mkdir_callback(const char *path, mode_t mode);

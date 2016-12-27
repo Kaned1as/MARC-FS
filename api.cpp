@@ -16,6 +16,9 @@
 #define NV_FILEPAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
     curl_pair<CURLformoption, string>(CURLFORM_FILE, value.c_str())
 
+#define NV_BUFPAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
+    curl_pair<CURLformoption, string>(CURLFORM_BUFFERPTR, value.data())
+
 using namespace std;
 using namespace curl;
 using namespace Json;
@@ -65,7 +68,7 @@ string API::performPost()
     curl_ios<ostringstream> writer(stream);
 
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(1L);
+    mClient->add<CURLOPT_VERBOSE>(verbose);
     mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
     mClient->add<CURLOPT_WRITEFUNCTION>(writer.get_function());
@@ -89,7 +92,7 @@ string API::performPost()
 void API::postAsync(Pipe &p)
 {
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(1L);
+    mClient->add<CURLOPT_VERBOSE>(verbose);
     mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
     mClient->add<CURLOPT_WRITEDATA>(&p);
@@ -97,7 +100,7 @@ void API::postAsync(Pipe &p)
         auto result = static_cast<Pipe*>(userp);
         unsigned char * bytes = static_cast<unsigned char *>(contents);
         const size_t realsize = size * nmemb;
-        vector<int8_t> data(&bytes[0], &bytes[realsize]);
+        vector<char> data(&bytes[0], &bytes[realsize]);
         result->push(data);
         return realsize;
     });
@@ -121,19 +124,19 @@ void API::getAsync(API::Pipe &p)
 
 }
 
-vector<int8_t> API::performGet()
+vector<char> API::performGet()
 {
-    vector<int8_t> result;
+    vector<char> result;
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(1L);
+    mClient->add<CURLOPT_VERBOSE>(verbose);
     mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     mClient->add<CURLOPT_WRITEDATA>(&result);
     mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<vector<int8_t>*>(userp);
-        unsigned char * bytes = static_cast<unsigned char *>(contents);
+        auto result = static_cast<vector<char>*>(userp);
+        char * bytes = static_cast<char *>(contents);
         const size_t realsize = size * nmemb;
-        vector<int8_t> data(&bytes[0], &bytes[realsize]);
+        vector<char> data(&bytes[0], &bytes[realsize]);
         result->insert(result->end(), data.begin(), data.end());
         return realsize;
     });
@@ -301,23 +304,28 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
 }
 
 
-void API::upload(std::vector<int8_t> data, string remotePath)
+void API::upload(std::vector<char> data, string remotePath)
 {
+    if (data.empty()) {
+        data.reserve(1);
+    }
+
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
 
     string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", mAccount.login}});
 
     curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
-    header.add("Referer: " + CLOUD_DOMAIN + "/home" + remotePath);
+    header.add("Referer: " + CLOUD_DOMAIN + "/home" + parentDir);
 
     curl_form nameForm;
-    nameForm.add(NV_FILEPAIR("file", data)); // fileupload part
-    nameForm.add(NV_PAIR("_file", filename)); // naming part
-
-    curl_form file_form;
+    nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
+                 curl_pair<CURLformoption, string>(CURLFORM_BUFFER, filename),
+                 curl_pair<CURLformoption, char*>(CURLFORM_BUFFERPTR, &data[0]),
+                 curl_pair<CURLformoption, long>(CURLFORM_BUFFERLENGTH, static_cast<long>(data.size()))); // fileupload part
 
     mClient->add<CURLOPT_URL>(uploadUrl.data());
     mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -325,9 +333,7 @@ void API::upload(std::vector<int8_t> data, string remotePath)
     mClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answer = performPost();
 
-    addUploadedFile(filename, remotePath, answer);
-
-    return;
+    addUploadedFile(filename, parentDir, answer);
 }
 
 void API::mkdir(string remotePath)
@@ -385,9 +391,9 @@ vector<CloudFile> API::ls(string remotePath)
     return results;
 }
 
-vector<int8_t> API::download(string remotePath)
+std::vector<char> API::download(string remotePath)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
-    return  performGet();
+    return performGet();
 }

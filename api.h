@@ -16,7 +16,7 @@ class API
 {
 public:
     using Params = std::map<std::string, std::string>;
-    using Pipe = BlockingQueue<std::vector<int8_t>>;
+    using Pipe = BlockingQueue<std::vector<char>>;
 
     API();
 
@@ -31,7 +31,7 @@ public:
      * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
      * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
      */
-    void upload(std::vector<int8_t> data, std::string remotePath);
+    void upload(std::vector<char> data, std::string remotePath);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
@@ -51,7 +51,7 @@ public:
      * @param remotePath remote path on cloud server
      * @param path path on local machine
      */
-    std::vector<int8_t> download(std::string remotePath);
+    std::vector<char> download(std::string remotePath);
 private:
 
     // api helpers
@@ -77,7 +77,7 @@ private:
     // cURL helpers
     std::string paramString(Params const &params);
     std::string performPost();
-    std::vector<int8_t> performGet();
+    std::vector<char> performGet();
 
     void postAsync(Pipe &p);
     void getAsync(Pipe &p);
@@ -87,6 +87,8 @@ private:
 
     std::unique_ptr<curl::curl_easy> mClient;
     curl::curl_cookie mCookies;
+
+    int64_t verbose = 1;
 };
 
 #endif // API_H

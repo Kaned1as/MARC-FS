@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="CURLCPP"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;CMake Files\contrib\;CMake Files\contrib\curlcpp\;CMake Files\contrib\curlcpp\CMake\;CMake Files\contrib\curlcpp\src\;CMake Files\CMakeModules\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/home/adonai/Work/C++/MailFuse/contrib/curlcpp"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="curlcpp">
+				<Option output="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/libcurlcpp.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/include-fixed"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/x86_64-pc-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/backward"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 curlcpp"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="curlcpp/fast">
+				<Option output="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/libcurlcpp.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/include"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/include-fixed"/>
+					<Add directory="/usr/include"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/x86_64-pc-linux-gnu"/>
+					<Add directory="/usr/lib/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/backward"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 curlcpp/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/cookie.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/cookie_date.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/cookie_datetime.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/cookie_time.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_cookie.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_easy.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_exception.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_form.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_header.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_info.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_multi.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/curl_share.cpp">
+			<Option target="curlcpp"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/CMake/curlcppConfig.cmake.in">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\CMake\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/CMake/curlcppConfig.cmake.in">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\CMake\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\src\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/contrib/curlcpp/src/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\contrib\curlcpp\src\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/CMakeModules/FindFUSE.cmake">
+			<Option virtualFolder="CMake Files\CMakeModules\"/>
+		</Unit>
+		<Unit filename="/home/adonai/Work/C++/MailFuse/CMakeModules/FindJSONCPP.cmake">
+			<Option virtualFolder="CMake Files\CMakeModules\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>
