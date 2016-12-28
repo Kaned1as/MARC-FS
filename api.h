@@ -52,6 +52,12 @@ public:
      * @param path path on local machine
      */
     std::vector<char> download(std::string remotePath);
+
+    /**
+     * @brief remove removes file pointed by remotePath from cloud storage
+     * @param remotePath remote path on cloud server
+     */
+    void remove(std::string remotePath);
 private:
 
     // api helpers
@@ -67,6 +73,14 @@ private:
     Shard obtainShard(Shard::ShardType type);
 
     // filesystem-related
+    /**
+     * @brief addUploadedFile adds uploaded file by hash to remote dir on cloud server.
+     *        This operation is required after uploading a file because it makes a hard link
+     *        to an uploaded file from your cloud storage.
+     * @param name name of file to be added
+     * @param remoteDir remote directory on cloud server
+     * @param hashSize hash and size of file delimited by colon
+     */
     void addUploadedFile(std::string name, std::string remoteDir, std::string hashSize);
 
     // auth
@@ -88,7 +102,7 @@ private:
     std::unique_ptr<curl::curl_easy> mClient;
     curl::curl_cookie mCookies;
 
-    int64_t verbose = 1;
+    int64_t verbose = 0;
 };
 
 #endif // API_H

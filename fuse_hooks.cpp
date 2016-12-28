@@ -67,14 +67,16 @@ int release_callback(const char *path, int mode)
     if (!fsMetadata.dirty[path])
         return 0;
 
-
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
     auto api = fsMetadata.apiPool.acquire();
     api->upload(it->second, path);
+
     fsMetadata.dirty[path] = false;
+    fsMetadata.cached.erase(it);
+    return 0;
 }
 
 int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_compat filler)
@@ -134,24 +136,33 @@ int write_callback(const char *path, const char *buf, size_t size, off_t offset)
 
 int flush_callback(const char *path)
 {
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
+    return 0;
 }
 
 int mkdir_callback(const char *path, mode_t mode)
 {
-
+    auto api = fsMetadata.apiPool.acquire();
+    api->mkdir(path);
+    return 0;
 }
 
 int rmdir_callback(const char *path)
 {
+    auto api = fsMetadata.apiPool.acquire();
+    auto contents = api->ls(path);
+    if (!contents.empty())
+        return -ENOTEMPTY;
 
+
+    api->remove(path);
+    return 0;
 }
 
 int unlink_callback(const char *path)
 {
-
+    auto api = fsMetadata.apiPool.acquire();
+    api->remove(path);
+    return 0;
 }
 
 int rename_callback(const char *oldPath, const char *newPath)

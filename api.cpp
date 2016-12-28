@@ -33,9 +33,13 @@ static const string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
 
 static const string SCLD_SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
 static const string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
+
 static const string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
-static const string SCLD_ADDFILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file/add";
-static const string SCLD_ADDFOLDER_ENDPOINT = CLOUD_DOMAIN + SCLD_FOLDER_ENDPOINT + "/add";
+static const string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
+
+static const string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
+static const string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
+static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1000L * 1000L * 1000L;
 
@@ -285,11 +289,10 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
     curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
-    header.add("Referer: " + CLOUD_DOMAIN + "/home" + remoteDir);
 
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rename"},
+        {"conflict", "rewrite"}, // rename is one more discovered option
         {"home", remoteDir + name},
         {"hash", fileHash},
         {"size", fileSize},
@@ -303,11 +306,29 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
     performPost();
 }
 
+void API::remove(string remotePath)
+{
+    curl_header header;
+    header.add("Accept: */*");
+    header.add("Origin: " + CLOUD_DOMAIN);
+
+    string postFields = paramString({
+        {"api", "2"},
+        {"home", remotePath},
+        {"token", mToken}
+    });
+
+    mClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
+    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    mClient->add<CURLOPT_HTTPHEADER>(header.get());
+    mClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    performPost();
+}
 
 void API::upload(std::vector<char> data, string remotePath)
 {
     if (data.empty()) {
-        data.reserve(1);
+        data.reserve(1); // make data pointer valid, no matter what
     }
 
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
@@ -319,7 +340,6 @@ void API::upload(std::vector<char> data, string remotePath)
     curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
-    header.add("Referer: " + CLOUD_DOMAIN + "/home" + parentDir);
 
     curl_form nameForm;
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
@@ -341,11 +361,10 @@ void API::mkdir(string remotePath)
     curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
-    header.add("Referer: " + CLOUD_DOMAIN + "/home" + remotePath);
 
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rename"},
+        {"conflict", "rename"},  // rewrite is one more discovered option
         {"home", remotePath},
         {"token", mToken}
     });
