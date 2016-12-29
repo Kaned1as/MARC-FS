@@ -13,12 +13,6 @@
 #define NV_PAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
                              curl_pair<CURLformoption, string>(CURLFORM_COPYCONTENTS, value.c_str())
 
-#define NV_FILEPAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
-    curl_pair<CURLformoption, string>(CURLFORM_FILE, value.c_str())
-
-#define NV_BUFPAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
-    curl_pair<CURLformoption, string>(CURLFORM_BUFFERPTR, value.data())
-
 using namespace std;
 using namespace curl;
 using namespace Json;
@@ -123,11 +117,6 @@ void API::postAsync(Pipe &p)
     p.markEnd();
 }
 
-void API::getAsync(API::Pipe &p)
-{
-
-}
-
 vector<char> API::performGet()
 {
     vector<char> result;
@@ -159,6 +148,36 @@ vector<char> API::performGet()
     mClient->reset();
 
     return result;
+}
+
+void API::performGetAsync(Pipe &p)
+{
+    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    mClient->add<CURLOPT_VERBOSE>(verbose);
+    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+    mClient->add<CURLOPT_WRITEDATA>(&p);
+    mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto result = static_cast<Pipe*>(userp);
+        char * bytes = static_cast<char *>(contents);
+        const size_t realsize = size * nmemb;
+        vector<char> data(&bytes[0], &bytes[realsize]);
+        result->push(data);
+        return realsize;
+    });
+
+    try {
+        mClient->perform();
+    } catch (curl::curl_easy_exception error) {
+        curl::curlcpp_traceback errors = error.get_traceback();
+        error.print_traceback();
+        throw MailApiException("Couldn't perform request!");
+    }
+    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
+    if (ret != 302 && ret != 200) // OK or redirect
+        throw MailApiException("non-success return code!");
+
+    mClient->reset();
 }
 
 API::API()
@@ -415,4 +434,11 @@ std::vector<char> API::download(string remotePath)
     Shard s = obtainShard(Shard::ShardType::GET);
     mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     return performGet();
+}
+
+void API::downloadAsync(string remotePath, Pipe &p)
+{
+    Shard s = obtainShard(Shard::ShardType::GET);
+    mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
+    return performGetAsync(p);
 }

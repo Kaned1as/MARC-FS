@@ -2,7 +2,7 @@
 #define FUSE_HOOKS_H
 
 #include <fuse.h>
-#include "utils.h"
+#include "mru_metadata.h"
 
 extern MruData fsMetadata;
 

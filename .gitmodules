@@ -1,3 +1,4 @@
 [submodule "curlcpp"]
 	path = contrib/curlcpp
-	url = https://github.com/JosephP91/curlcpp.git
+    url = https://github.com/JosephP91/curlcpp.git
+    ignore = dirty

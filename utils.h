@@ -1,24 +1,9 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <iostream>
 #include <curl_info.h>
 
-#include "thread_pool.h"
 #include "object_pool.h"
-#include "api.h"
-
-struct MruData {
-
-    MruData() : apiPool(1) {
-
-    }
-
-    std::map<std::string, std::vector<char>> cached;
-    std::map<std::string, bool> dirty;
-    std::map<std::string, API::Pipe> writes;
-    ObjectPool<API> apiPool;
-};
 
 struct MailApiException : public std::exception {
     MailApiException(std::string reason) : reason(reason) {}

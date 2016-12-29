@@ -64,17 +64,18 @@ int open_callback(const char *path, int mode)
 
 int release_callback(const char *path, int mode)
 {
-    if (!fsMetadata.dirty[path])
-        return 0;
-
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto api = fsMetadata.apiPool.acquire();
-    api->upload(it->second, path);
+    auto &node = it->second;
+    if (!node.isDirty())
+        return 0;
 
-    fsMetadata.dirty[path] = false;
+    auto api = fsMetadata.apiPool.acquire();
+    api->upload(node.getCachedContent(), path);
+
+    node.setDirty(false);
     fsMetadata.cached.erase(it);
     return 0;
 }
@@ -101,7 +102,7 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto &vec = it->second;
+    auto &vec = it->second.getCachedContent();
     auto len = vec.size();
 
     if (offsetBytes > len)
@@ -124,13 +125,13 @@ int write_callback(const char *path, const char *buf, size_t size, off_t offset)
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto &vec = it->second;
+    auto &vec = it->second.getCachedContent();
     if (offsetBytes + size > vec.size()) {
         vec.resize(offsetBytes + size);
     }
 
-    memcpy(&vec[offsetBytes], &buf[0], size);
-    fsMetadata.dirty[path] = true;
+    memcpy(&vec[offsetBytes], buf, size);
+    it->second.setDirty(true);
     return static_cast<int>(size);
 }
 
@@ -176,7 +177,7 @@ int truncate_callback(const char *path, off_t size)
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto &vec = it->second;
+    auto &vec = it->second.getCachedContent();
     vec.resize(static_cast<uint64_t>(size));
     return 0;
 }

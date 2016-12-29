@@ -52,6 +52,7 @@ public:
      * @param path path on local machine
      */
     std::vector<char> download(std::string remotePath);
+    void downloadAsync(std::string remotePath, Pipe &p);
 
     /**
      * @brief remove removes file pointed by remotePath from cloud storage
@@ -92,9 +93,9 @@ private:
     std::string paramString(Params const &params);
     std::string performPost();
     std::vector<char> performGet();
+    void performGetAsync(Pipe &p);
 
     void postAsync(Pipe &p);
-    void getAsync(Pipe &p);
 
     Account mAccount;
     std::string mToken;
