@@ -1,6 +1,7 @@
 #include "fuse_hooks.h"
 
 #include <cstring>
+#include <future>
 
 using namespace std;
 
@@ -58,7 +59,7 @@ int utime_callback(const char *path, utimbuf *utime)
 int open_callback(const char *path, int mode)
 {
     auto api = fsMetadata.apiPool.acquire();
-    fsMetadata.cached[path] = api->download(path);
+    fsMetadata.cached[path] = MruNode(); // cache it for later use
     return 0;
 }
 
@@ -102,19 +103,21 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto &vec = it->second.getCachedContent();
-    auto len = vec.size();
-
-    if (offsetBytes > len)
-        return 0; // requested bytes above the size
-
-    if (offsetBytes + size > len) {
-        // requested size is more than we have
-        memcpy(buf, &vec[0] + offsetBytes, len - offsetBytes);
-        return static_cast<int>(len - offsetBytes);
+    auto &node = it->second;
+    uint64_t readAlready = node.getTransferred(); // chunks that were already read
+    uint64_t readNow = 0;
+    // we're reading this file, try to pipe it from the cloud
+    if (offsetBytes == 0) { // that's a start
+        auto api = fsMetadata.apiPool.acquire();
+        auto handle = async(&API::downloadAsync, api.get(), path, ref(node.getTransfer()));
+        while (!node.getTransfer().exhausted()) {
+            // get next chunk, possibly blocking
+            auto vec = node.getTransfer().pop();
+            readNow += vec.size();
+        }
     }
 
-    memcpy(buf, &vec[0] + offsetBytes, size);
+    node.setTransferred(readAlready + readNow);
     return static_cast<int>(size);
 }
 
