@@ -20,6 +20,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
     if (slashPos == string::npos)
         return -EIO;
 
+    // find requested file on cloud
     string dirname = pathStr.substr(0, slashPos); // /home
     string filename = pathStr.substr(slashPos + 1);
     auto api = fsMetadata.apiPool.acquire();
@@ -28,6 +29,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
         return file.getName() == filename; // now find file in returned results
     });
 
+    // file found - fill struct
     if (file != contents.cend()) {
         stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
         stbuf->st_gid = ctx->gid;
@@ -43,6 +45,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
         return 0;
     }
 
+    // file not found
     return -ENOENT;
 }
 
@@ -89,7 +92,7 @@ int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_comp
     string pathStr(path); // e.g. /directory or /
     auto api = fsMetadata.apiPool.acquire();
     auto contents = api->ls(pathStr);
-    for (CloudFile &cf : contents) {
+    for (const CloudFile &cf : contents) {
         filler(dirhandle, cf.getName().data(), 0);
     }
 
@@ -106,30 +109,31 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
     auto &node = it->second;
     uint64_t readAlready = node.getTransferred(); // chunks that were already read
     uint64_t readNow = 0;
-    // we're reading this file, try to pipe it from the cloud
-    if (offsetBytes == 0) { // that's a start
-        auto api = fsMetadata.apiPool.acquire();
-        auto handle = async(&API::downloadAsync, api.get(), path, ref(node.getTransfer()));
+    auto callRead = [&]() {
         while (!node.getTransfer().exhausted()) {
             // get next chunk, possibly blocking
             readNow += node.getTransfer().pop(buf + readNow, size - readNow); // actual transfer of bytes to the buffer
-            if (readNow == size)
+            if (readNow == size) // reached limit
                 break;
         }
+    }
+    
+    // we're reading this file, try to pipe it from the cloud
+    if (offsetBytes == 0) { // that's a start
+        auto api = fsMetadata.apiPool.acquire();
+        // set up async API transfer that will fill our queue
+        auto handle = async(&API::downloadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns it to the pool while download is still in progress!
+        callRead();
     } else if (offsetBytes == readAlready) { // that's continuation of previous call
-        //
-        while (!node.getTransfer().exhausted()) {
-            // we already started async transfer, continue
-            readNow += node.getTransfer().pop(buf + readNow, size - readNow);
-            if (readNow == size)
-                break;
-        }
+        // transfer must already been set, continue
+        callRead();
     } else {
+        // attempt to read a file not sequentially, abort
         return -EBADE;
     }
 
     node.setTransferred(readAlready + readNow);
-    return static_cast<int>(size);
+    return static_cast<int>(readNow);
 }
 
 int write_callback(const char *path, const char *buf, size_t size, off_t offset)
