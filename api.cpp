@@ -87,7 +87,7 @@ string API::performPost()
     return stream.str();
 }
 
-void API::postAsync(Pipe &p)
+void API::postAsync(BlockingQueue<char> &p)
 {
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     mClient->add<CURLOPT_VERBOSE>(verbose);
@@ -95,7 +95,7 @@ void API::postAsync(Pipe &p)
 
     mClient->add<CURLOPT_WRITEDATA>(&p);
     mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<Pipe*>(userp);
+        auto result = static_cast<BlockingQueue<char>*>(userp);
         unsigned char * bytes = static_cast<unsigned char *>(contents);
         const size_t realsize = size * nmemb;
         vector<char> data(&bytes[0], &bytes[realsize]);
@@ -113,8 +113,8 @@ void API::postAsync(Pipe &p)
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
-    mClient->reset();
     p.markEnd();
+    mClient->reset();
 }
 
 vector<char> API::performGet()
@@ -150,7 +150,7 @@ vector<char> API::performGet()
     return result;
 }
 
-void API::performGetAsync(Pipe &p)
+void API::performGetAsync(BlockingQueue<char> &p)
 {
     mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     mClient->add<CURLOPT_VERBOSE>(verbose);
@@ -158,7 +158,7 @@ void API::performGetAsync(Pipe &p)
     mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
     mClient->add<CURLOPT_WRITEDATA>(&p);
     mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<Pipe*>(userp);
+        auto result = static_cast<BlockingQueue<char>*>(userp);
         char * bytes = static_cast<char *>(contents);
         const size_t realsize = size * nmemb;
         vector<char> data(&bytes[0], &bytes[realsize]);
@@ -177,6 +177,7 @@ void API::performGetAsync(Pipe &p)
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
+    p.markEnd();
     mClient->reset();
 }
 
@@ -436,7 +437,7 @@ std::vector<char> API::download(string remotePath)
     return performGet();
 }
 
-void API::downloadAsync(string remotePath, Pipe &p)
+void API::downloadAsync(string remotePath, BlockingQueue<char> &p)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());

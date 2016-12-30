@@ -112,9 +112,20 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
         auto handle = async(&API::downloadAsync, api.get(), path, ref(node.getTransfer()));
         while (!node.getTransfer().exhausted()) {
             // get next chunk, possibly blocking
-            auto vec = node.getTransfer().pop();
-            readNow += vec.size();
+            readNow += node.getTransfer().pop(buf + readNow, size - readNow); // actual transfer of bytes to the buffer
+            if (readNow == size)
+                break;
         }
+    } else if (offsetBytes == readAlready) { // that's continuation of previous call
+        //
+        while (!node.getTransfer().exhausted()) {
+            // we already started async transfer, continue
+            readNow += node.getTransfer().pop(buf + readNow, size - readNow);
+            if (readNow == size)
+                break;
+        }
+    } else {
+        return -EBADE;
     }
 
     node.setTransferred(readAlready + readNow);

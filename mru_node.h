@@ -7,7 +7,7 @@
 
 class MruNode
 {
-    using Pipe = BlockingQueue<std::vector<char>>;
+    using Pipe = BlockingQueue<char>;
 public:
     MruNode();
     MruNode(std::vector<char> &&data);
@@ -46,11 +46,11 @@ private:
      * @brief transferred - number of bytes transferred so far. Needed for
      *        sequential transfer, see @ref MruNode.transfer field.
      */
-    uint64_t transferred;
+    uint64_t transferred = 0;
     /**
      * @brief dirty - used to indicate whether subsequent upload is needed
      */
-    bool dirty;
+    bool dirty = false;
 };
 
 #endif // MRU_NODE_H

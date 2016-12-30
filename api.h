@@ -16,7 +16,6 @@ class API
 {
 public:
     using Params = std::map<std::string, std::string>;
-    using Pipe = BlockingQueue<std::vector<char>>;
 
     API();
 
@@ -52,7 +51,7 @@ public:
      * @param path path on local machine
      */
     std::vector<char> download(std::string remotePath);
-    void downloadAsync(std::string remotePath, Pipe &p);
+    void downloadAsync(std::string remotePath, BlockingQueue<char> &p);
 
     /**
      * @brief remove removes file pointed by remotePath from cloud storage
@@ -93,9 +92,9 @@ private:
     std::string paramString(Params const &params);
     std::string performPost();
     std::vector<char> performGet();
-    void performGetAsync(Pipe &p);
+    void performGetAsync(BlockingQueue<char> &p);
 
-    void postAsync(Pipe &p);
+    void postAsync(BlockingQueue<char> &p);
 
     Account mAccount;
     std::string mToken;

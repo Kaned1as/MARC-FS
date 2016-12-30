@@ -5,48 +5,88 @@
 #include <mutex>
 #include <condition_variable>
 #include <deque>
+#include <vector>
+#include <algorithm>
 
-template <typename T>
+template <typename T, typename K = std::vector<T>>
 class BlockingQueue
 {
 public:
     void push(T const& value) {
         {
-            std::unique_lock<std::mutex> lock(this->mutex);
+            std::unique_lock<std::mutex> lock(mutex);
             queue.push_front(value);
         }
-        this->condition.notify_one();
+        condition.notify_one();
+    }
+
+    /**
+     * @brief push - overloaded to accept container type as parameter
+     *        Provides bulk insert into underlying queue.
+     * @param value container with elements to insert
+     */
+    void push(K& value) {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            queue.insert(queue.end(), value.begin(), value.end());
+        }
+        condition.notify_one();
     }
 
     void push(T const&& value) {
         {
-            std::unique_lock<std::mutex> lock(this->mutex);
-            queue.emplace_front(value);
+            std::unique_lock<std::mutex> lock(mutex);
+            queue.emplace_front(std::move(value));
         }
-        this->condition.notify_one();
+        condition.notify_one();
+    }
+
+
+    void pop(K &target, size_t max) {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this]{ return !queue.empty() || eof; });
+        if (queue.empty() && eof) // end of stream
+            return;
+
+        size_t resultSize = std::max(queue.size(), max);
+        target.reserve(resultSize);
+        std::copy_n(queue.begin(), resultSize, target.data());
+        queue.erase(queue.begin(), queue.begin() + resultSize);
+    }
+
+    size_t pop(char *target, size_t max) {
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this]{ return !queue.empty() || eof; });
+        if (queue.empty() && eof) // end of stream
+            return 0;
+
+        size_t resultSize = std::min(queue.size(), max);
+        std::copy_n(queue.begin(), resultSize, target);
+        queue.erase(queue.begin(), queue.begin() + resultSize);
+        return resultSize;
     }
 
     T pop() {
-        std::unique_lock<std::mutex> lock(this->mutex);
-        this->condition.wait(lock, [this]{ return !queue.empty() || eof; });
-        if (queue.empty() && this->eof) // end of stream
+        std::unique_lock<std::mutex> lock(mutex);
+        condition.wait(lock, [this]{ return !queue.empty() || eof; });
+        if (queue.empty() && eof) // end of stream
             return T();
 
-        T rc = this->queue.back();
-        this->queue.pop_back();
+        T rc = queue.back();
+        queue.pop_back();
         return rc;
     }
 
     bool exhausted() {
-        return this->eof && this->queue.empty();
+        return eof && queue.empty();
     }
 
     void markEnd() {
         {
-            std::unique_lock<std::mutex> lock(this->mutex);
-            this->eof = true;
+            std::unique_lock<std::mutex> lock(mutex);
+            eof = true;
         }
-        this->condition.notify_all();
+        condition.notify_all();
     }
 
 private:

@@ -30,7 +30,7 @@ public:
     PtrType acquire() {
         {
             std::unique_lock<std::mutex> lock(acquire_mutex);
-            condition.wait(lock, [this]{ return !this->objects.empty(); });
+            condition.wait(lock, [this]{ return !objects.empty(); });
             PtrType tmp(objects.front().release(), ExternalDeleter(this));
             objects.pop_front();
             return std::move(tmp);

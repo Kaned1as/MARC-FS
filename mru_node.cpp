@@ -2,12 +2,13 @@
 
 MruNode::MruNode()
 {
-
+    transfer.reset(new BlockingQueue<char>);
 }
 
 MruNode::MruNode(std::vector<char> &&data)
 {
     cachedContent = std::move(data);
+    transfer.reset(new BlockingQueue<char>);
 }
 
 MruNode::Pipe& MruNode::getTransfer()
