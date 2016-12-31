@@ -25,13 +25,7 @@ public:
      *        Provides bulk insert into underlying queue.
      * @param value container with elements to insert
      */
-    void push(K& value) {
-        {
-            std::unique_lock<std::mutex> lock(mutex);
-            queue.insert(queue.end(), value.begin(), value.end());
-        }
-        condition.notify_one();
-    }
+    void push(K& value);
 
     void push(T const&& value) {
         {
@@ -42,17 +36,7 @@ public:
     }
 
 
-    void pop(K &target, size_t max) {
-        std::unique_lock<std::mutex> lock(mutex);
-        condition.wait(lock, [this]{ return !queue.empty() || eof; });
-        if (queue.empty() && eof) // end of stream
-            return;
-
-        size_t resultSize = std::max(queue.size(), max);
-        target.reserve(resultSize);
-        std::copy_n(queue.begin(), resultSize, target.data());
-        queue.erase(queue.begin(), queue.begin() + resultSize);
-    }
+    void pop(K &target, size_t max);
 
     size_t pop(char *target, size_t max) {
         std::unique_lock<std::mutex> lock(mutex);
@@ -90,10 +74,33 @@ public:
     }
 
 private:
-    std::mutex              mutex;
+    std::mutex mutex;
     std::condition_variable condition;
-    std::deque<T>           queue;
-    bool                    eof;
+    std::deque<T> queue;
+    bool eof = false;
 };
+
+
+template<typename T, typename K>
+void BlockingQueue<T, K>::push(K &value) {
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        queue.insert(queue.end(), value.begin(), value.end());
+    }
+    condition.notify_one();
+}
+
+template<typename T, typename K>
+void BlockingQueue<T, K>::pop(K &target, size_t max) {
+    std::unique_lock<std::mutex> lock(mutex);
+    condition.wait(lock, [this]{ return !queue.empty() || eof; });
+    if (queue.empty() && eof) // end of stream
+        return;
+
+    size_t resultSize = std::min(queue.size(), max);
+    target.reserve(resultSize);
+    std::copy_n(queue.begin(), resultSize, target.data());
+    queue.erase(queue.begin(), queue.begin() + resultSize);
+}
 
 #endif // BLOCKING_QUEUE_H

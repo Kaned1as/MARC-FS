@@ -2,13 +2,14 @@
 #define API_H
 
 #include "account.h"
-#include "api_shard.h"
-#include "api_cloudfile.h"
+#include "marc_api_shard.h"
+#include "marc_api_cloudfile.h"
 
 #include "curl_easy.h"
 #include "curl_cookie.h"
 
 #include "blocking_queue.h"
+#include "utils.h"
 
 #include <memory>
 
@@ -25,12 +26,23 @@ public:
      * @return true if authenticated successfully, false otherwise.
      */
     bool login(const Account& acc);
+
     /**
-     * @brief upload uploads the file represented in path to the remote dir represented by remotePath
-     * @param path path to local file (e.g. 123.cpp or /home/user/123.cpp)
-     * @param remote_path remote path to folder where uploaded file should be (e.g. /home/newfolder)
+     * @brief upload uploads bytes in @param data to remote endpoint
+     * @param remotePath remote path to folder where uploaded file should be (e.g. /newfolder)
      */
-    void upload(std::vector<char> data, std::string remotePath);
+    void upload(std::string remotePath, std::vector<char> &data);
+
+    /**
+     * @brief uploadAsync - async version of @fn upload call
+     *
+     * @note DOES NOT WORK - REST API's nginx server doesn't support chunked POST
+     * requests.
+     *
+     * @param remotePath - remote path
+     * @param p - pipe to read data from
+     */
+    void uploadAsync(std::string remotePath, BlockingQueue<char> &p);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
@@ -48,9 +60,15 @@ public:
     /**
      * @brief download download file pointed by remotePath to local path
      * @param remotePath remote path on cloud server
-     * @param path path on local machine
+     * @return data downloaded from server
      */
     std::vector<char> download(std::string remotePath);
+
+    /**
+     * @brief downloadAsync - async version of @fn download call
+     * @param remotePath - path from where download file to (e.g. /file.txt)
+     * @param p - pipe to store downloaded bytes to
+     */
     void downloadAsync(std::string remotePath, BlockingQueue<char> &p);
 
     /**
@@ -58,6 +76,16 @@ public:
      * @param remotePath remote path on cloud server
      */
     void remove(std::string remotePath);
+
+    /**
+     * @brief df - report file system disk space usage
+     *
+     * REST API actually doesn't provide exact numbers of total bytes,
+     * block size, used blocks etc., so only rough precision may be used.
+     *
+     * @return SpaceInfo struct with total and used fields filled in
+     */
+    SpaceInfo df();
 private:
 
     // api helpers
@@ -93,14 +121,13 @@ private:
     std::string performPost();
     std::vector<char> performGet();
     void performGetAsync(BlockingQueue<char> &p);
+    void performPostAsync(BlockingQueue<char> &p);
 
-    void postAsync(BlockingQueue<char> &p);
+    Account authAccount;
+    std::string authToken;
 
-    Account mAccount;
-    std::string mToken;
-
-    std::unique_ptr<curl::curl_easy> mClient;
-    curl::curl_cookie mCookies;
+    std::unique_ptr<curl::curl_easy> restClient;
+    curl::curl_cookie cookieStore;
 
     int64_t verbose = 0;
 };

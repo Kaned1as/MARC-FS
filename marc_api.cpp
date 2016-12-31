@@ -1,8 +1,7 @@
 #include "curl_header.h"
 #include "curl_ios.h"
 
-#include "api.h"
-#include "utils.h"
+#include "marc_api.h"
 
 #include <numeric>
 #include <iterator>
@@ -30,12 +29,13 @@ static const string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
 
 static const string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
 static const string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
+static const string SCLD_SPACE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/user/space";
 
 static const string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
 static const string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
-static const long MAX_FILE_SIZE = 2L * 1000L * 1000L * 1000L;
+static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
 
 string API::paramString(Params const &params)
 {
@@ -49,8 +49,8 @@ string API::paramString(Params const &params)
         if (name.empty())
             continue;
 
-        mClient->escape(name);
-        mClient->escape(value);
+        restClient->escape(name);
+        restClient->escape(value);
         string argument = value.empty() ? name : name + "=" + value;
         result.push_back(argument);
     }
@@ -65,69 +65,39 @@ string API::performPost()
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
 
-    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(verbose);
-    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+    restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    restClient->add<CURLOPT_VERBOSE>(verbose);
+    restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
-    mClient->add<CURLOPT_WRITEFUNCTION>(writer.get_function());
-    mClient->add<CURLOPT_WRITEDATA>(writer.get_stream());
+    restClient->add<CURLOPT_WRITEFUNCTION>(writer.get_function());
+    restClient->add<CURLOPT_WRITEDATA>(writer.get_stream());
     try {
-        mClient->perform();
+        restClient->perform();
     } catch (curl::curl_easy_exception error) {
         curl::curlcpp_traceback errors = error.get_traceback();
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");
     }
-    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
+    int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
-    mClient->reset();
+    restClient->reset();
 
     return stream.str();
-}
-
-void API::postAsync(BlockingQueue<char> &p)
-{
-    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(verbose);
-    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
-
-    mClient->add<CURLOPT_WRITEDATA>(&p);
-    mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<BlockingQueue<char>*>(userp);
-        unsigned char * bytes = static_cast<unsigned char *>(contents);
-        const size_t realsize = size * nmemb;
-        vector<char> data(&bytes[0], &bytes[realsize]);
-        result->push(data);
-        return realsize;
-    });
-    try {
-        mClient->perform();
-    } catch (curl::curl_easy_exception error) {
-        curl::curlcpp_traceback errors = error.get_traceback();
-        error.print_traceback();
-        throw MailApiException("Couldn't perform request!");
-    }
-    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
-    if (ret != 302 && ret != 200) // OK or redirect
-        throw MailApiException("non-success return code!");
-
-    p.markEnd();
-    mClient->reset();
 }
 
 vector<char> API::performGet()
 {
     vector<char> result;
-    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(verbose);
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
-    mClient->add<CURLOPT_WRITEDATA>(&result);
-    mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<vector<char>*>(userp);
-        char * bytes = static_cast<char *>(contents);
+    restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    restClient->add<CURLOPT_VERBOSE>(verbose);
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+    restClient->add<CURLOPT_WRITEDATA>(&result);
+    restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto result = static_cast<vector<char> *>(userp);
+        char *bytes = static_cast<char *>(contents);
         const size_t realsize = size * nmemb;
         vector<char> data(&bytes[0], &bytes[realsize]);
         result->insert(result->end(), data.begin(), data.end());
@@ -135,30 +105,30 @@ vector<char> API::performGet()
     });
 
     try {
-        mClient->perform();
+        restClient->perform();
     } catch (curl::curl_easy_exception error) {
         curl::curlcpp_traceback errors = error.get_traceback();
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");
     }
-    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
+    int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
-    mClient->reset();
+    restClient->reset();
 
     return result;
 }
 
 void API::performGetAsync(BlockingQueue<char> &p)
 {
-    mClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    mClient->add<CURLOPT_VERBOSE>(verbose);
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
-    mClient->add<CURLOPT_WRITEDATA>(&p);
-    mClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<BlockingQueue<char>*>(userp);
+    restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    restClient->add<CURLOPT_VERBOSE>(verbose);
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+    restClient->add<CURLOPT_WRITEDATA>(&p);
+    restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto result = static_cast<BlockingQueue<char> *>(userp);
         char * bytes = static_cast<char *>(contents);
         const size_t realsize = size * nmemb;
         vector<char> data(&bytes[0], &bytes[realsize]);
@@ -167,25 +137,26 @@ void API::performGetAsync(BlockingQueue<char> &p)
     });
 
     try {
-        mClient->perform();
+        restClient->perform();
     } catch (curl::curl_easy_exception error) {
         curl::curlcpp_traceback errors = error.get_traceback();
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");
     }
-    int64_t ret = mClient->get_info<CURLINFO_RESPONSE_CODE>().get();
+    int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
         throw MailApiException("non-success return code!");
 
     p.markEnd();
-    mClient->reset();
+    restClient->reset();
 }
 
 API::API()
-    : mClient(make_unique<curl::curl_easy>()),
-      mCookies(*mClient)
+    : restClient(make_unique<curl::curl_easy>()),
+      cookieStore(*restClient)
 {
-    mCookies.set_file(""); // init cookie engine
+    cookieStore.set_file(""); // init cookie engine
+    restClient->reset(); // reset debug->std:cout function
 }
 
 bool API::login(const Account &acc)
@@ -196,7 +167,7 @@ bool API::login(const Account &acc)
     if (acc.password.empty())
         throw MailApiException("Password not specified!");
 
-    mAccount = acc;
+    authAccount = acc;
 
     authenticate();
     obtainCloudCookie();
@@ -214,15 +185,15 @@ void API::authenticate()
     // Login={0}&Domain={1}&Password={2}
 
     curl_form form;
-    form.add(NV_PAIR("Login", mAccount.login));
-    form.add(NV_PAIR("Password", mAccount.password));
+    form.add(NV_PAIR("Login", authAccount.login));
+    form.add(NV_PAIR("Password", authAccount.password));
     form.add(NV_PAIR("Domain", string("mail.ru")));
 
-    mClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
-    mClient->add<CURLOPT_HTTPPOST>(form.get());
+    restClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
+    restClient->add<CURLOPT_HTTPPOST>(form.get());
     performPost();
 
-    if (mCookies.get().empty()) // no cookies received, halt
+    if (cookieStore.get().empty()) // no cookies received, halt
         throw MailApiException("Failed to authenticate in mail.ru domain!");
 }
 
@@ -235,14 +206,14 @@ void API::obtainCloudCookie()
     curl_form form;
     form.add(NV_PAIR("from", string(CLOUD_DOMAIN + "/home")));
 
-    size_t cookiesSize = mCookies.get().size();
+    size_t cookiesSize = cookieStore.get().size();
 
-    mClient->add<CURLOPT_URL>(SCLD_COOKIE_ENDPOINT.data());
-    mClient->add<CURLOPT_HTTPPOST>(form.get());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_URL>(SCLD_COOKIE_ENDPOINT.data());
+    restClient->add<CURLOPT_HTTPPOST>(form.get());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     performPost();
 
-    if (mCookies.get().size() <= cookiesSize) // didn't get any new cookies
+    if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
         throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
 }
 
@@ -255,8 +226,8 @@ void API::obtainAuthToken()
     curl_header header;
     header.add("Accept: application/json");
     
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
-    mClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
     string answer = performPost();
 
     Value response;
@@ -268,7 +239,7 @@ void API::obtainAuthToken()
     if (response["body"] == Value() || response["body"]["token"] == Value())
         throw MailApiException("Received json doesn't contain token string!");
 
-    mToken = response["body"]["token"].asString();
+    authToken = response["body"]["token"].asString();
 }
 
 Shard API::obtainShard(Shard::ShardType type)
@@ -278,9 +249,9 @@ Shard API::obtainShard(Shard::ShardType type)
     curl_header header;
     header.add("Accept: application/json");
 
-    string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", mToken}});
-    mClient->add<CURLOPT_URL>(url.data());
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
+    string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
+    restClient->add<CURLOPT_URL>(url.data());
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answer = performPost();
 
     Value response;
@@ -316,13 +287,13 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
         {"home", remoteDir + name},
         {"hash", fileHash},
         {"size", fileSize},
-        {"token", mToken}
+        {"token", authToken}
     });
 
-    mClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
-    mClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    restClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
 
@@ -335,17 +306,51 @@ void API::remove(string remotePath)
     string postFields = paramString({
         {"api", "2"},
         {"home", remotePath},
-        {"token", mToken}
+        {"token", authToken}
     });
 
-    mClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
-    mClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    restClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
 
-void API::upload(std::vector<char> data, string remotePath)
+SpaceInfo API::df()
+{
+    curl_header header;
+    header.add("Accept: application/json");
+
+    string getFields = paramString({
+        {"api", "2"},
+        {"token", authToken},
+    });
+
+    restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    string answerJson = performPost();
+
+    SpaceInfo result;
+    Value response;
+    Reader reader;
+
+    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
+        throw MailApiException("Cannot parse JSON ls response!");
+
+    // if `total` is there, `used` will definitely be...
+    if (response["body"] == Value() || response["body"]["total"] == Value())
+        throw MailApiException("Non-well formed JSON ls response!");
+
+    Value &total = response["body"]["total"];
+    Value &used = response["body"]["used"];
+
+    result.totalMiB = total.asUInt64();
+    result.usedPercent = used.asUInt();
+    return result;
+}
+
+void API::upload(string remotePath, vector<char>& data)
 {
     if (data.empty()) {
         data.reserve(1); // make data pointer valid, no matter what
@@ -355,7 +360,7 @@ void API::upload(std::vector<char> data, string remotePath)
 
     string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
-    string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", mAccount.login}});
+    string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
     curl_header header;
     header.add("Accept: */*");
@@ -364,13 +369,54 @@ void API::upload(std::vector<char> data, string remotePath)
     curl_form nameForm;
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_BUFFER, filename),
-                 curl_pair<CURLformoption, char*>(CURLFORM_BUFFERPTR, &data[0]),
+                 curl_pair<CURLformoption, char *>(CURLFORM_BUFFERPTR, &data[0]),
                  curl_pair<CURLformoption, long>(CURLFORM_BUFFERLENGTH, static_cast<long>(data.size()))); // fileupload part
 
-    mClient->add<CURLOPT_URL>(uploadUrl.data());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_HTTPPOST>(nameForm.get());
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_URL>(uploadUrl.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    string answer = performPost();
+
+    addUploadedFile(filename, parentDir, answer);
+}
+
+void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
+{
+    Shard s = obtainShard(Shard::ShardType::UPLOAD);
+
+    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
+    string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
+
+    curl_header header;
+    header.add("Accept: */*");
+    header.add("Transfer-Encoding: chunked"); // we don't know exact size of the upload...
+    header.add("Content-Length: 0");
+    header.add("Origin: " + CLOUD_DOMAIN);
+
+    curl_form nameForm;
+    nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
+                 curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
+                 curl_pair<CURLformoption, void *>(CURLFORM_STREAM, &p),
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTLEN, 1)); // streamupload part
+
+    restClient->add<CURLOPT_URL>(uploadUrl.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto result = static_cast<BlockingQueue<char> *>(userp);
+        char *target = static_cast<char *>(contents);
+        const size_t requested = size * nmemb;
+        size_t transferred = 0;
+        while (!result->exhausted()) { // try to pull from the other end of queue
+            transferred += result->pop(target + transferred, requested - transferred);
+            if (transferred == requested)
+                break;
+        }
+        return transferred;
+    });
     string answer = performPost();
 
     addUploadedFile(filename, parentDir, answer);
@@ -386,13 +432,13 @@ void API::mkdir(string remotePath)
         {"api", "2"},
         {"conflict", "rename"},  // rewrite is one more discovered option
         {"home", remotePath},
-        {"token", mToken}
+        {"token", authToken}
     });
 
-    mClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
-    mClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    restClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
 
@@ -402,15 +448,15 @@ vector<CloudFile> API::ls(string remotePath)
     header.add("Accept: application/json");
 
     string getFields = paramString({
-        {"token", mToken},
+        {"api", "2"},
+        {"token", authToken},
         {"home", remotePath}
     });
 
-    mClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    mClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    mClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answerJson = performPost();
-    cout << answerJson;
 
     vector<CloudFile> results;
     Value response;
@@ -433,13 +479,13 @@ vector<CloudFile> API::ls(string remotePath)
 std::vector<char> API::download(string remotePath)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
-    mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
+    restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     return performGet();
 }
 
 void API::downloadAsync(string remotePath, BlockingQueue<char> &p)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
-    mClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
+    restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     return performGetAsync(p);
 }

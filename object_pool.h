@@ -52,7 +52,7 @@ private:
         : pool(pool) {}
 
         void operator()(T* ptr) {
-                pool->add(std::unique_ptr<T>{ptr});
+                pool->add(std::unique_ptr<T>(ptr));
                 return;
         }
 

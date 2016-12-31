@@ -25,13 +25,14 @@ int main(int argc, char *argv[])
     cloudfs_oper.mkdir = &mkdir_callback;
     cloudfs_oper.rmdir = &rmdir_callback;
     cloudfs_oper.write = &write_callback;
-    cloudfs_oper.truncate = nullptr;
+    cloudfs_oper.truncate = &truncate_callback;
     cloudfs_oper.unlink = &unlink_callback;
     cloudfs_oper.flush = &flush_callback;
     cloudfs_oper.rename = &rename_callback;
     cloudfs_oper.statfs = &statfs_callback;
     cloudfs_oper.chmod = nullptr;
     cloudfs_oper.utime = &utime_callback;
+    cloudfs_oper.mknod = &mknod_callback;
 
     Account acc;
     acc.setLogin("kairllur@mail.ru");

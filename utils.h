@@ -5,6 +5,18 @@
 
 #include "object_pool.h"
 
+/**
+ * @brief The SpaceInfo struct - just a simple wrapper for API space call
+ *        answer.
+ *
+ * @see API::df
+ */
+struct SpaceInfo
+{
+    size_t totalMiB = 0;
+    uint32_t usedPercent = 0;
+};
+
 struct MailApiException : public std::exception {
     MailApiException(std::string reason) : reason(reason) {}
 

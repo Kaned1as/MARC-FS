@@ -29,7 +29,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
         return file.getName() == filename; // now find file in returned results
     });
 
-    // file found - fill struct
+    // file found - fill statbuf
     if (file != contents.cend()) {
         stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
         stbuf->st_gid = ctx->gid;
@@ -49,24 +49,47 @@ int getattr_callback(const char *path, struct stat *stbuf)
     return -ENOENT;
 }
 
-int statfs_callback(const char *path, struct statfs *stat)
+int statfs_callback(const char */*path*/, struct statfs *stat)
+{
+    auto api = fsMetadata.apiPool.acquire();
+    auto info = api->df();
+
+    /*
+        uint32 f_type; // fs type
+        uint32 f_bsize; // optimal transfer block size
+        uint32 f_blocks; // total block count in fs
+        uint32 f_bfree; // free block count in fs
+        uint32 f_bavail; // free block count available for non-root
+        uint32 f_files; // total node count in filesystem
+        uint32 f_ffree; // free node count in filesystem
+        struct { int sid[2]; } f_fsid; // ids - major, minor of filesystem
+        uint32 f_namelen; // maximum file naming length
+        uint32 f_spare[6]; // reserved
+    */
+
+    stat->f_type = 0; // ignored
+    stat->f_fsid = {}; // ignored
+    stat->f_bsize = 4096; // a guess!
+    stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
+    stat->f_bfree = stat->f_blocks * (100 - info.usedPercent) / 100;
+    stat->f_bavail = stat->f_bfree;
+    stat->f_namelen = 256;
+    return 0;
+}
+
+int utime_callback(const char */*path*/, utimbuf *utime)
 {
 
 }
 
-int utime_callback(const char *path, utimbuf *utime)
-{
-
-}
-
-int open_callback(const char *path, int mode)
+int open_callback(const char *path, int /*mode*/)
 {
     auto api = fsMetadata.apiPool.acquire();
     fsMetadata.cached[path] = MruNode(); // cache it for later use
     return 0;
 }
 
-int release_callback(const char *path, int mode)
+int release_callback(const char *path, int /*mode*/)
 {
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
@@ -76,11 +99,7 @@ int release_callback(const char *path, int mode)
     if (!node.isDirty())
         return 0;
 
-    auto api = fsMetadata.apiPool.acquire();
-    api->upload(node.getCachedContent(), path);
-
-    node.setDirty(false);
-    fsMetadata.cached.erase(it);
+    node.getTransfer().markEnd();
     return 0;
 }
 
@@ -116,13 +135,15 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
             if (readNow == size) // reached limit
                 break;
         }
-    }
+    };
     
     // we're reading this file, try to pipe it from the cloud
     if (offsetBytes == 0) { // that's a start
         auto api = fsMetadata.apiPool.acquire();
         // set up async API transfer that will fill our queue
-        auto handle = async(&API::downloadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns it to the pool while download is still in progress!
+        auto handle = bind(&API::downloadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
+        thread(handle).detach();
+
         callRead();
     } else if (offsetBytes == readAlready) { // that's continuation of previous call
         // transfer must already been set, continue
@@ -143,22 +164,37 @@ int write_callback(const char *path, const char *buf, size_t size, off_t offset)
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
 
-    auto &vec = it->second.getCachedContent();
-    if (offsetBytes + size > vec.size()) {
-        vec.resize(offsetBytes + size);
+    auto &node = it->second;
+    auto writtenAlready = node.getTransferred();
+    vector<char> vec(buf, buf + size);
+    // we're writing this file, try to send it chunked to the cloud
+    if (offsetBytes == 0) { // that's a start
+        auto api = fsMetadata.apiPool.acquire();
+        // set up async API transfer that will fill our queue
+        auto handle = bind(&API::uploadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
+        thread(handle).detach();
+
+        node.getTransfer().push(vec); // actual transfer of bytes to the queue
+        node.setTransferred(writtenAlready + size);
+    } else if (offsetBytes == writtenAlready) { // that's continuation of previous call
+        // transfer must already been set, continue
+        node.getTransfer().push(vec);
+    } else {
+        // attempt to write a file not sequentially, abort
+        return -EBADE;
     }
 
-    memcpy(&vec[offsetBytes], buf, size);
-    it->second.setDirty(true);
+    node.setDirty(true);
+    node.setTransferred(writtenAlready + size);
     return static_cast<int>(size);
 }
 
-int flush_callback(const char *path)
+int flush_callback(const char */*path*/)
 {
     return 0;
 }
 
-int mkdir_callback(const char *path, mode_t mode)
+int mkdir_callback(const char *path, mode_t /*mode*/)
 {
     auto api = fsMetadata.apiPool.acquire();
     api->mkdir(path);
@@ -200,9 +236,10 @@ int truncate_callback(const char *path, off_t size)
     return 0;
 }
 
-int mknod_callback(const char *path, mode_t mode, dev_t dev)
+int mknod_callback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
     auto api = fsMetadata.apiPool.acquire();
-    api->upload(vector<char>(), path);
+    vector<char> tmp; // lvalue
+    api->upload(path, tmp);
     return 0;
 }

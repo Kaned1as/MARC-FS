@@ -1,4 +1,4 @@
-project(MailFuse)
+project(MARC-FS)
 cmake_minimum_required(VERSION 2.8)
 aux_source_directory(. SRC_LIST)
 
@@ -34,5 +34,5 @@ else()
     include_directories(${JSONCPP_INCLUDE_DIR})
 endif()
 
-add_executable(${PROJECT_NAME} ${SRC_LIST})
-target_link_libraries(${PROJECT_NAME} curlcpp jsoncpp fuse pthread)
+add_executable("marcfs" ${SRC_LIST})
+target_link_libraries("marcfs" curlcpp jsoncpp fuse pthread)

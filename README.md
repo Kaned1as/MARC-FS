@@ -17,7 +17,7 @@ MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. 
     $ cd build && cmake ..
     $ make
     $ # here goes the step where you actually go and register on mail.ru website to obtain cloud storage and auth info
-    $ ./MarcFS /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
+    $ ./marcfs /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
 
 API references
 --------------
@@ -37,12 +37,13 @@ Bugs & Known issues
 -------------------
 1. Temporary
   - No multithreading at the moment
-  - Files are read fully into memory before doing any operations (may increase memory footprint **a lot**) (WIP)
   - No tests :(
+  - No support for files larger than 2GB (seriously dunno what would happen)
 2. Principal (Mail.ru Cloud API limitations)
   - No statfs support, you cannot determine how much place is left on cloud storage
-  - No extended attr/chmod support, all files on storage are owned by you.
+  - No extended attr/chmod support, all files on storage are owned by you
   - No atime/ctime support, only mtime is stored
+  - No `Transfer-Encoding: chunked` support for POST **requests** in cloud nginx (`chunkin on`/`proxy_request_buffering` options in `nginx`/`tengine` config), so files are read fully into memory before uploading
 
 Contributions
 ------------
