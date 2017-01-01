@@ -391,8 +391,8 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
 
     curl_header header;
     header.add("Accept: */*");
-    header.add("Transfer-Encoding: chunked"); // we don't know exact size of the upload...
-    header.add("Content-Length: 0");
+    //header.add("Transfer-Encoding: chunked"); // we don't know exact size of the upload...
+    //header.add("Content-Length: 0");
     header.add("Origin: " + CLOUD_DOMAIN);
 
     curl_form nameForm;

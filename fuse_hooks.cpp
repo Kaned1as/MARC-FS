@@ -3,12 +3,35 @@
 #include <cstring>
 #include <future>
 
+#define MARCFS_MEMTRIM          malloc_trim(0) // force OS to reclaim memory from us
+
 using namespace std;
+
+static void fill_stats(struct stat *stbuf, const CloudFile &cf) {
+    auto ctx = fuse_get_context();
+
+    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
+    stbuf->st_gid = ctx->gid;
+    if (cf.getType() == CloudFile::Directory) { // is it a directory?
+        stbuf->st_mode = S_IFDIR | 0700;
+        stbuf->st_nlink = 2;
+    } else if (cf.getType() == CloudFile::File) { // or a file?
+        stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
+        stbuf->st_nlink = 1;
+        stbuf->st_size = static_cast<off_t>(cf.getSize()); // offset is 32 bit on x86 platforms
+    }
+};
+
+
+void *init_callback(fuse_conn_info *conn)
+{
+    conn->want |= FUSE_CAP_BIG_WRITES;
+    return nullptr;
+}
 
 int getattr_callback(const char *path, struct stat *stbuf)
 {
     // retrieve path to containing dir
-    fuse_context *ctx = fuse_get_context();
     string pathStr(path); // e.g. /home/1517.svg
     if (pathStr == "/") {
         stbuf->st_mode = S_IFDIR | 0755;
@@ -31,17 +54,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
 
     // file found - fill statbuf
     if (file != contents.cend()) {
-        stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
-        stbuf->st_gid = ctx->gid;
-        stbuf->st_mtim.tv_sec = static_cast<int64_t>((*file).getMtime());
-        if ((*file).getType() == CloudFile::Directory) { // is it a directory?
-            stbuf->st_mode = S_IFDIR | 0700;
-            stbuf->st_nlink = 2;
-        } else if ((*file).getType() == CloudFile::File) { // or a file?
-            stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
-            stbuf->st_nlink = 1;
-            stbuf->st_size = static_cast<off_t>((*file).getSize()); // offset is 32 bit on x86 platforms
-        }
+        fill_stats(stbuf, *file);
         return 0;
     }
 
@@ -49,13 +62,12 @@ int getattr_callback(const char *path, struct stat *stbuf)
     return -ENOENT;
 }
 
-int statfs_callback(const char */*path*/, struct statfs *stat)
+int statfs_callback(const char */*path*/, struct statvfs *stat)
 {
     auto api = fsMetadata.apiPool.acquire();
     auto info = api->df();
 
     /*
-        uint32 f_type; // fs type
         uint32 f_bsize; // optimal transfer block size
         uint32 f_blocks; // total block count in fs
         uint32 f_bfree; // free block count in fs
@@ -67,13 +79,12 @@ int statfs_callback(const char */*path*/, struct statfs *stat)
         uint32 f_spare[6]; // reserved
     */
 
-    stat->f_type = 0; // ignored
     stat->f_fsid = {}; // ignored
     stat->f_bsize = 4096; // a guess!
     stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
     stat->f_bfree = stat->f_blocks * (100 - info.usedPercent) / 100;
     stat->f_bavail = stat->f_bfree;
-    stat->f_namelen = 256;
+    stat->f_namemax = 256;
     return 0;
 }
 
@@ -82,14 +93,22 @@ int utime_callback(const char */*path*/, utimbuf *utime)
 
 }
 
-int open_callback(const char *path, int /*mode*/)
+int open_callback(const char *path, struct fuse_file_info *fi)
 {
     auto api = fsMetadata.apiPool.acquire();
-    fsMetadata.cached[path] = MruNode(); // cache it for later use
+    fsMetadata.cached[path] = MruNode(); // create it for later use
+
+    if (fi->flags & (O_WRONLY | O_RDWR)) {
+        // file is supposedly opened for writing, we should cache it
+        // due to cloud API limitation
+        fsMetadata.cached[path].setCachedContent(api->download(path));
+    }
+
+
     return 0;
 }
 
-int release_callback(const char *path, int /*mode*/)
+int release_callback(const char *path, struct fuse_file_info *fi)
 {
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
@@ -103,22 +122,24 @@ int release_callback(const char *path, int /*mode*/)
     return 0;
 }
 
-int readdir_callback(const char *path, fuse_dirh_t dirhandle, fuse_dirfil_t_compat filler)
+int readdir_callback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
-    filler(dirhandle, ".", 0);
-    filler(dirhandle, "..", 0);
+    filler(dirhandle, ".", nullptr, 0);
+    filler(dirhandle, "..", nullptr, 0);
 
     string pathStr(path); // e.g. /directory or /
     auto api = fsMetadata.apiPool.acquire();
     auto contents = api->ls(pathStr);
     for (const CloudFile &cf : contents) {
-        filler(dirhandle, cf.getName().data(), 0);
+        struct stat stbuf = {};
+        fill_stats(&stbuf, cf);
+        filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
 
     return 0;
 }
 
-int read_callback(const char *path, char *buf, size_t size, off_t offset)
+int read_callback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -157,7 +178,7 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset)
     return static_cast<int>(readNow);
 }
 
-int write_callback(const char *path, const char *buf, size_t size, off_t offset)
+int write_callback(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -189,7 +210,7 @@ int write_callback(const char *path, const char *buf, size_t size, off_t offset)
     return static_cast<int>(size);
 }
 
-int flush_callback(const char */*path*/)
+int flush_callback(const char *path, struct fuse_file_info *fi)
 {
     return 0;
 }
