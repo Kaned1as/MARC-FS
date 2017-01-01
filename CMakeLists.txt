@@ -4,6 +4,8 @@ aux_source_directory(. SRC_LIST)
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 14)
+MESSAGE(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
+MESSAGE( STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
 set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64")

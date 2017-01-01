@@ -1,11 +1,12 @@
 #include <iostream>
+#include <cstddef> // offsetof macro
 #include <unistd.h>
 
 #include "fuse_hooks.h"
 #include "account.h"
 #include "utils.h"
 
-#define MRUFS_OPT(t, p, v) { t, offsetof(struct marcfs_config, p), v }
+#define MRUFS_OPT(t, p, v) { t, offsetof(marcfs_config, p), v }
 #define MARC_FS_VERSION "0.1"
 
 using namespace std;
@@ -33,7 +34,7 @@ static struct fuse_opt marcfs_opts[] = {
      FUSE_OPT_END
 };
 
-static int marcfs_opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs)
+static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct fuse_args *outargs)
 {
     switch (key) {
         case KEY_HELP:

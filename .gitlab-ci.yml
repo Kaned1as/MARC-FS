@@ -1,0 +1,17 @@
+image: ubuntu
+
+before_script:
+  - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
+
+smoke: # smoke build - just test that it compiles
+  script:
+    - uname -a
+    - git submodule update --init --recursive # update curlcpp
+    - mkdir build
+    - cd build
+    - cmake ..
+    - "make -j$(nproc)"
+  artifacts:
+    paths:
+      - build/marcfs
+  

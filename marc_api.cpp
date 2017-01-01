@@ -395,12 +395,13 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
     //header.add("Content-Length: 0");
     header.add("Origin: " + CLOUD_DOMAIN);
 
-    curl_form nameForm;
+    curl_form nameForm; // streamupload part
+    /*
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
                  curl_pair<CURLformoption, void *>(CURLFORM_STREAM, &p),
-                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTLEN, 1)); // streamupload part
-
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, 1)); // replace with CURLFORM_CONTENTLEN in future
+    */
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());

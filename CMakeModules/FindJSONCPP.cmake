@@ -12,8 +12,9 @@
 
 # only look in default directories
 find_path(
-	JSONCPP_INCLUDE_DIR 
-	NAMES jsoncpp/json/json.h json/json.h
+    JSONCPP_INCLUDE_DIR
+    NAMES json/json.h
+    PATH_SUFFIXES jsoncpp
 	DOC "jsoncpp include dir"
 )
 
@@ -24,7 +25,9 @@ find_library(
 )
 
 set(JSONCPP_INCLUDE_DIRS ${JSONCPP_INCLUDE_DIR})
+message(STATUS "jsoncpp include dirs: " ${JSONCPP_INCLUDE_DIRS})
 set(JSONCPP_LIBRARIES ${JSONCPP_LIBRARY})
+message(STATUS "jsoncpp libs: " ${JSONCPP_LIBRARIES})
 
 # debug library on windows
 # same naming convention as in qt (appending debug library with d)
@@ -56,7 +59,6 @@ endif()
 # handle the QUIETLY and REQUIRED arguments and set JSONCPP_FOUND to TRUE
 # if all listed variables are TRUE, hide their existence from configuration view
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(jsoncpp DEFAULT_MSG
-	JSONCPP_INCLUDE_DIR JSONCPP_LIBRARY)
+find_package_handle_standard_args(jsoncpp DEFAULT_MSG JSONCPP_INCLUDE_DIR JSONCPP_LIBRARY)
 mark_as_advanced (JSONCPP_INCLUDE_DIR JSONCPP_LIBRARY)
 
