@@ -6,43 +6,45 @@
 #include <mutex>
 #include <condition_variable>
 
+#include <iostream>
+
 template<typename T>
 class ObjectPool
 {
-    using PtrType = std::unique_ptr<T, std::function<void(T*)>>;
-
 public:
     ObjectPool(size_t num)
     {
-        for (int i = 0; i < num; ++i) {
-            objects.emplace_back(std::unique_ptr<T>(new T()));
+        for (size_t i = 0; i < num; ++i) {
+            objects.emplace_back(std::shared_ptr<T>(new T(), ExternalDeleter(this)));
         }
     }
 
     template<typename F, typename ...Args>
     void initialize(F&& functor, Args... args) {
         for (int i = 0; i < objects.size(); ++i) {
-            PtrType obj = acquire();
+            auto obj = acquire();
             (obj.get()->*functor)(args...);
         }
     }
 
-    PtrType acquire() {
+    std::shared_ptr<T> acquire() {
         {
             std::unique_lock<std::mutex> lock(acquire_mutex);
+            std::cout << "Acquiring API object..." << std::endl;
             condition.wait(lock, [this]{ return !objects.empty(); });
-            PtrType tmp(objects.front().release(), ExternalDeleter(this));
+            auto tmp = std::move(objects.front());
             objects.pop_front();
-            return std::move(tmp);
+            return tmp;
         }
     }
 
-    void add(std::unique_ptr<T> obj) {
+    void add(std::shared_ptr<T> obj) {
         {
             std::unique_lock<std::mutex> lock(acquire_mutex);
+            std::cout << "Returning API object to the pool..." << std::endl;
             objects.emplace_back(std::move(obj));
-            condition.notify_one();
         }
+        condition.notify_one();
     }
 
 private:
@@ -52,7 +54,7 @@ private:
         : pool(pool) {}
 
         void operator()(T* ptr) {
-                pool->add(std::unique_ptr<T>(ptr));
+                pool->add(std::shared_ptr<T>(ptr, *this));
                 return;
         }
 
@@ -64,7 +66,7 @@ private:
     std::condition_variable condition;
     std::mutex acquire_mutex;
 
-    std::list<std::unique_ptr<T>> objects;
+    std::list<std::shared_ptr<T>> objects;
 };
 
 #endif // OBJECT_POOL_H

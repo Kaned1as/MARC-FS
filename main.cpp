@@ -84,22 +84,22 @@ int main(int argc, char *argv[])
 
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};
-    cloudfs_oper.init = &init_callback;
-    cloudfs_oper.read = &read_callback;
-    cloudfs_oper.getattr = &getattr_callback;
-    cloudfs_oper.readdir = &readdir_callback;
-    cloudfs_oper.open = &open_callback;
-    cloudfs_oper.release = &release_callback;
-    cloudfs_oper.mkdir = &mkdir_callback;
-    cloudfs_oper.rmdir = &rmdir_callback;
-    cloudfs_oper.write = &write_callback;
-    cloudfs_oper.truncate = &truncate_callback;
-    cloudfs_oper.unlink = &unlink_callback;
-    cloudfs_oper.flush = &flush_callback;
-    cloudfs_oper.rename = &rename_callback;
-    cloudfs_oper.statfs = &statfs_callback;
-    cloudfs_oper.utime = &utime_callback;
-    cloudfs_oper.mknod = &mknod_callback;
+    cloudfs_oper.init = &initCallback;
+    cloudfs_oper.read = &readCallback;
+    cloudfs_oper.getattr = &getattrCallback;
+    cloudfs_oper.readdir = &readdirCallback;
+    cloudfs_oper.open = &openCallback;
+    cloudfs_oper.release = &releaseCallback;
+    cloudfs_oper.mkdir = &mkdirCallback;
+    cloudfs_oper.rmdir = &rmdirCallback;
+    cloudfs_oper.write = &writeCallback;
+    cloudfs_oper.truncate = &truncateCallback;
+    cloudfs_oper.unlink = &unlinkCallback;
+    cloudfs_oper.flush = &flushCallback;
+    cloudfs_oper.rename = &renameCallback;
+    cloudfs_oper.statfs = &statfsCallback;
+    cloudfs_oper.utime = &utimeCallback;
+    cloudfs_oper.mknod = &mknodCallback;
 
     //api.upload("863272.jpg", "/home/");
     //api.mkdir("/newfolder");

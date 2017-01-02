@@ -1,13 +1,14 @@
 #include "fuse_hooks.h"
 
+#include <malloc.h>
 #include <cstring>
 #include <future>
 
-#define MARCFS_MEMTRIM          malloc_trim(0) // force OS to reclaim memory from us
+#define MARCFS_MEMTRIM          malloc_trim(0); // force OS to reclaim memory from us
 
 using namespace std;
 
-static void fill_stats(struct stat *stbuf, const CloudFile &cf) {
+static void fillStats(struct stat *stbuf, const CloudFile &cf) {
     auto ctx = fuse_get_context();
 
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
@@ -23,13 +24,22 @@ static void fill_stats(struct stat *stbuf, const CloudFile &cf) {
 };
 
 
-void *init_callback(fuse_conn_info *conn)
+void *initCallback(fuse_conn_info *conn)
 {
-    conn->want |= FUSE_CAP_BIG_WRITES;
+    conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
+
+    // confusing, right?
+    // one may think we support async reads because we invoke downloadAsync from API
+    // but don't be fooled - these download-related reads come *sequentially*,
+    // with each next offset being equal to last + total.
+    // FUSE_CAP_ASYNC_READ value means that multiple reads with different offsets
+    // will come in one time. We surely can't support this.
+    conn->want &= static_cast<unsigned>(~FUSE_CAP_ASYNC_READ);
+    conn->async_read = 0;
     return nullptr;
 }
 
-int getattr_callback(const char *path, struct stat *stbuf)
+int getattrCallback(const char *path, struct stat *stbuf)
 {
     // retrieve path to containing dir
     string pathStr(path); // e.g. /home/1517.svg
@@ -54,7 +64,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
 
     // file found - fill statbuf
     if (file != contents.cend()) {
-        fill_stats(stbuf, *file);
+        fillStats(stbuf, *file);
         return 0;
     }
 
@@ -62,7 +72,7 @@ int getattr_callback(const char *path, struct stat *stbuf)
     return -ENOENT;
 }
 
-int statfs_callback(const char */*path*/, struct statvfs *stat)
+int statfsCallback(const char */*path*/, struct statvfs *stat)
 {
     auto api = fsMetadata.apiPool.acquire();
     auto info = api->df();
@@ -88,12 +98,12 @@ int statfs_callback(const char */*path*/, struct statvfs *stat)
     return 0;
 }
 
-int utime_callback(const char */*path*/, utimbuf *utime)
+int utimeCallback(const char */*path*/, utimbuf *utime)
 {
 
 }
 
-int open_callback(const char *path, struct fuse_file_info *fi)
+int openCallback(const char *path, struct fuse_file_info *fi)
 {
     auto api = fsMetadata.apiPool.acquire();
     fsMetadata.cached[path] = MruNode(); // create it for later use
@@ -104,11 +114,10 @@ int open_callback(const char *path, struct fuse_file_info *fi)
         fsMetadata.cached[path].setCachedContent(api->download(path));
     }
 
-
     return 0;
 }
 
-int release_callback(const char *path, struct fuse_file_info *fi)
+int releaseCallback(const char *path, struct fuse_file_info *fi)
 {
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
@@ -118,11 +127,19 @@ int release_callback(const char *path, struct fuse_file_info *fi)
     if (!node.isDirty())
         return 0;
 
-    node.getTransfer().markEnd();
+    // node.getTransfer().markEnd(); // for async operations - not working, incomplete
+    // node.transferThread.join();
+    // node.setDirty(false);
+    auto api = fsMetadata.apiPool.acquire(); // for sync operations
+    api->upload(path, node.getCachedContent());
+
+    fsMetadata.cached.erase(it); // memory cleanup
+    MARCFS_MEMTRIM
+
     return 0;
 }
 
-int readdir_callback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
+int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t /*offset*/, struct fuse_file_info */*fi*/)
 {
     filler(dirhandle, ".", nullptr, 0);
     filler(dirhandle, "..", nullptr, 0);
@@ -132,14 +149,14 @@ int readdir_callback(const char *path, void *dirhandle, fuse_fill_dir_t filler, 
     auto contents = api->ls(pathStr);
     for (const CloudFile &cf : contents) {
         struct stat stbuf = {};
-        fill_stats(&stbuf, cf);
+        fillStats(&stbuf, cf);
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
 
     return 0;
 }
 
-int read_callback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -162,7 +179,7 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset, struct
     if (offsetBytes == 0) { // that's a start
         auto api = fsMetadata.apiPool.acquire();
         // set up async API transfer that will fill our queue
-        auto handle = bind(&API::downloadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
+        auto handle = bind(&API::downloadAsync, api, path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
         thread(handle).detach();
 
         callRead();
@@ -178,7 +195,7 @@ int read_callback(const char *path, char *buf, size_t size, off_t offset, struct
     return static_cast<int>(readNow);
 }
 
-int write_callback(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
+int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -210,19 +227,37 @@ int write_callback(const char *path, const char *buf, size_t size, off_t offset,
     return static_cast<int>(size);
 }
 
-int flush_callback(const char *path, struct fuse_file_info *fi)
+int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info *fi)
+{
+    auto offsetBytes = static_cast<uint64_t>(offset);
+    auto it = fsMetadata.cached.find(path);
+    if (it == fsMetadata.cached.end())
+        return -EBADR; // Should be cached after open() call
+
+    auto &vec = it->second.getCachedContent();
+    if (offsetBytes + size > vec.size()) {
+        vec.resize(offsetBytes + size);
+    }
+
+    memcpy(&vec[offsetBytes], buf, size);
+    it->second.setDirty(true);
+    return static_cast<int>(size);
+}
+
+
+int flushCallback(const char *path, struct fuse_file_info *fi)
 {
     return 0;
 }
 
-int mkdir_callback(const char *path, mode_t /*mode*/)
+int mkdirCallback(const char *path, mode_t /*mode*/)
 {
     auto api = fsMetadata.apiPool.acquire();
     api->mkdir(path);
     return 0;
 }
 
-int rmdir_callback(const char *path)
+int rmdirCallback(const char *path)
 {
     auto api = fsMetadata.apiPool.acquire();
     auto contents = api->ls(path);
@@ -234,19 +269,19 @@ int rmdir_callback(const char *path)
     return 0;
 }
 
-int unlink_callback(const char *path)
+int unlinkCallback(const char *path)
 {
     auto api = fsMetadata.apiPool.acquire();
     api->remove(path);
     return 0;
 }
 
-int rename_callback(const char *oldPath, const char *newPath)
+int renameCallback(const char *oldPath, const char *newPath)
 {
 
 }
 
-int truncate_callback(const char *path, off_t size)
+int truncateCallback(const char *path, off_t size)
 {
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
@@ -257,7 +292,7 @@ int truncate_callback(const char *path, off_t size)
     return 0;
 }
 
-int mknod_callback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
+int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
     auto api = fsMetadata.apiPool.acquire();
     vector<char> tmp; // lvalue

@@ -8,30 +8,33 @@
 
 extern MruData fsMetadata;
 
-void * init_callback(struct fuse_conn_info *conn);
+void * initCallback(struct fuse_conn_info *conn);
 
-int getattr_callback(const char *path, struct stat *stbuf);
-int statfs_callback(const char *path, struct statvfs *stat);
-int utime_callback(const char *path, struct utimbuf *utime);
+int getattrCallback(const char *path, struct stat *stbuf);
+int statfsCallback(const char *path, struct statvfs *stat);
+int utimeCallback(const char *path, struct utimbuf *utime);
 
-int open_callback(const char *path, struct fuse_file_info *fi);
-int release_callback(const char *path, struct fuse_file_info *fi);
+int openCallback(const char *path, struct fuse_file_info *fi);
+int releaseCallback(const char *path, struct fuse_file_info *fi);
 
-int mknod_callback(const char *path, mode_t mode, dev_t dev);
-int readdir_callback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
-int read_callback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 /**
- * @brief write_callback_async - doesn't work due to cloud API limitation, see @fn write_callback
+ * @note mknodCallback - invoked when file is absent when writing
  */
-int write_callback_async(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-int write_callback(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-int truncate_callback(const char *path, off_t size);
-int flush_callback(const char *path, fuse_file_info *fi);
+int mknodCallback(const char *path, mode_t mode, dev_t dev);
+int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
+int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+/**
+ * @note writeCallbackAsync - doesn't work due to cloud API limitation, see @fn write_callback
+ */
+int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+int writeCallback(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+int truncateCallback(const char *path, off_t size);
+int flushCallback(const char *path, fuse_file_info *fi);
 
-int mkdir_callback(const char *path, mode_t mode);
-int rmdir_callback(const char *path);
+int mkdirCallback(const char *path, mode_t mode);
+int rmdirCallback(const char *path);
 
-int unlink_callback(const char *path);
-int rename_callback(const char *oldPath, const char *newPath);
+int unlinkCallback(const char *path);
+int renameCallback(const char *oldPath, const char *newPath);
 
 #endif // FUSE_HOOKS_H
