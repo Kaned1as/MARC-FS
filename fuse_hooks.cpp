@@ -29,8 +29,8 @@ void *initCallback(fuse_conn_info *conn)
     conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
 
     // confusing, right?
-    // one may think we support async reads because we invoke downloadAsync from API
-    // but don't be fooled - these download-related reads come *sequentially*,
+    // one would think we support async reads because we invoke downloadAsync from API
+    // but here's the thing - these download-related reads come *sequentially*,
     // with each next offset being equal to last + total.
     // FUSE_CAP_ASYNC_READ value means that multiple reads with different offsets
     // will come in one time. We surely can't support this.
@@ -100,7 +100,8 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 int utimeCallback(const char */*path*/, utimbuf *utime)
 {
-
+    // stub
+    return 0;
 }
 
 int openCallback(const char *path, struct fuse_file_info *fi)
@@ -156,7 +157,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     return 0;
 }
 
-int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -179,7 +180,8 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
     if (offsetBytes == 0) { // that's a start
         auto api = fsMetadata.apiPool.acquire();
         // set up async API transfer that will fill our queue
-        auto handle = bind(&API::downloadAsync, api, path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
+        // api object will return to the pool once download is complete
+        auto handle = bind(&API::downloadAsync, api, path, ref(node.getTransfer()));
         thread(handle).detach();
 
         callRead();
@@ -278,7 +280,9 @@ int unlinkCallback(const char *path)
 
 int renameCallback(const char *oldPath, const char *newPath)
 {
-
+    auto api = fsMetadata.apiPool.acquire();
+    api->rename(oldPath, newPath);
+    return 0;
 }
 
 int truncateCallback(const char *path, off_t size)

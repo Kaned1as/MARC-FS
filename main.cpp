@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};
     cloudfs_oper.init = &initCallback;
-    cloudfs_oper.read = &readCallback;
+    cloudfs_oper.read = &readCallbackAsync;
     cloudfs_oper.getattr = &getattrCallback;
     cloudfs_oper.readdir = &readdirCallback;
     cloudfs_oper.open = &openCallback;

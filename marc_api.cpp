@@ -33,6 +33,8 @@ static const string SCLD_SPACE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/user/space";
 
 static const string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
 static const string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
+static const string SCLD_RENAMEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/rename";
+static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
@@ -65,6 +67,11 @@ string API::performPost()
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
 
+    curl_header header;
+    header.add("Accept: */*");
+    header.add("Origin: " + CLOUD_DOMAIN);
+
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
@@ -90,6 +97,12 @@ string API::performPost()
 vector<char> API::performGet()
 {
     vector<char> result;
+
+    curl_header header;
+    header.add("Accept: */*");
+    header.add("Origin: " + CLOUD_DOMAIN);
+
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -297,12 +310,24 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
     performPost();
 }
 
+void API::move(string whatToMove, string whereToMove)
+{
+    string postFields = paramString({
+        {"api", "2"},
+        {"conflict", "rewrite"},  // rewrite is one more discovered option
+        {"folder", whereToMove},
+        {"home", whatToMove},
+        {"token", authToken}
+    });
+
+    restClient->add<CURLOPT_URL>(SCLD_MOVEFILE_ENDPOINT.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    performPost();
+}
+
 void API::remove(string remotePath)
 {
-    curl_header header;
-    header.add("Accept: */*");
-    header.add("Origin: " + CLOUD_DOMAIN);
-
     string postFields = paramString({
         {"api", "2"},
         {"home", remotePath},
@@ -311,7 +336,6 @@ void API::remove(string remotePath)
 
     restClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
@@ -350,6 +374,35 @@ SpaceInfo API::df()
     return result;
 }
 
+void API::rename(string oldRemotePath, string newRemotePath)
+{
+    string oldFilename = oldRemotePath.substr(oldRemotePath.find_last_of("/\\") + 1);
+    string oldParentDir = oldRemotePath.substr(0, oldRemotePath.find_last_of("/\\") + 1);
+
+    string newFilename = newRemotePath.substr(newRemotePath.find_last_of("/\\") + 1);
+    string newParentDir = newRemotePath.substr(0, newRemotePath.find_last_of("/\\") + 1);
+
+    string postFields = paramString({
+        {"api", "2"},
+        {"conflict", "rewrite"}, // rename is one more discovered option
+        {"home", oldRemotePath},
+        {"name", newFilename},
+        {"token", authToken}
+    });
+
+    restClient->add<CURLOPT_URL>(SCLD_RENAMEFILE_ENDPOINT.data());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    performPost();
+
+    // FIXME: think about version that doesn't rewrite file with name == newFilename
+    // placed in the old dir.
+
+    if (oldParentDir != newParentDir) {
+        move(oldParentDir + newFilename, newParentDir);
+    }
+}
+
 void API::upload(string remotePath, vector<char>& data)
 {
     if (data.empty()) {
@@ -362,10 +415,6 @@ void API::upload(string remotePath, vector<char>& data)
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
-    curl_header header;
-    header.add("Accept: */*");
-    header.add("Origin: " + CLOUD_DOMAIN);
-
     curl_form nameForm;
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_BUFFER, filename),
@@ -375,7 +424,6 @@ void API::upload(string remotePath, vector<char>& data)
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answer = performPost();
 
     addUploadedFile(filename, parentDir, answer);
@@ -389,11 +437,8 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
-    curl_header header;
-    header.add("Accept: */*");
     //header.add("Transfer-Encoding: chunked"); // we don't know exact size of the upload...
     //header.add("Content-Length: 0");
-    header.add("Origin: " + CLOUD_DOMAIN);
 
     curl_form nameForm; // streamupload part
     /*
@@ -405,7 +450,6 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto result = static_cast<BlockingQueue<char> *>(userp);
         char *target = static_cast<char *>(contents);
@@ -425,20 +469,15 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
 
 void API::mkdir(string remotePath)
 {
-    curl_header header;
-    header.add("Accept: */*");
-    header.add("Origin: " + CLOUD_DOMAIN);
-
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rename"},  // rewrite is one more discovered option
+        {"conflict", "rewrite"},  // rename is one more discovered option
         {"home", remotePath},
         {"token", authToken}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }

@@ -86,6 +86,16 @@ public:
      * @return SpaceInfo struct with total and used fields filled in
      */
     SpaceInfo df();
+
+    /**
+     * @brief rename - renames (moves) file from @param oldRemotePath
+     *        to @param newRemotePath. Overwrites destination file if
+     *        it's already present.
+     *
+     * @param oldRemotePath full path to file to be renamed
+     * @param newRemotePath full new path to file
+     */
+    void rename(std::string oldRemotePath, std::string newRemotePath);
 private:
 
     // api helpers
@@ -110,6 +120,15 @@ private:
      * @param hashSize hash and size of file delimited by colon
      */
     void addUploadedFile(std::string name, std::string remoteDir, std::string hashSize);
+    /**
+     * @brief move - moves file from one directory to another.
+     *        This operation complements @fn rename call
+     *        if destination file is in another dir.
+     *
+     * @param whatToMove - file/folder to be moved
+     * @param whereToMove - destination directory
+     */
+    void move(std::string whatToMove, std::string whereToMove);
 
     // auth
     void authenticate();
