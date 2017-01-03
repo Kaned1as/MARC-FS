@@ -4,7 +4,7 @@
 #include <cstring>
 #include <future>
 
-#define MARCFS_MEMTRIM          malloc_trim(0); // force OS to reclaim memory from us
+#define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024); // force OS to reclaim memory above 64KiB from us
 
 using namespace std;
 
@@ -56,7 +56,7 @@ int getattrCallback(const char *path, struct stat *stbuf)
     // find requested file on cloud
     string dirname = pathStr.substr(0, slashPos); // /home
     string filename = pathStr.substr(slashPos + 1);
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     auto contents = api->ls(dirname); // actual API call - ls the directory that contains this file
     auto file = find_if(contents.cbegin(), contents.cend(), [&](const CloudFile &file) {
         return file.getName() == filename; // now find file in returned results
@@ -74,7 +74,7 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
 int statfsCallback(const char */*path*/, struct statvfs *stat)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     auto info = api->df();
 
     /*
@@ -98,7 +98,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
     return 0;
 }
 
-int utimeCallback(const char */*path*/, utimbuf *utime)
+int utimeCallback(const char */*path*/, utimbuf */*utime*/)
 {
     // stub
     return 0;
@@ -106,7 +106,7 @@ int utimeCallback(const char */*path*/, utimbuf *utime)
 
 int openCallback(const char *path, struct fuse_file_info *fi)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     fsMetadata.cached[path] = MruNode(); // create it for later use
 
     if (fi->flags & (O_WRONLY | O_RDWR)) {
@@ -118,21 +118,11 @@ int openCallback(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-int releaseCallback(const char *path, struct fuse_file_info *fi)
+int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto it = fsMetadata.cached.find(path);
     if (it == fsMetadata.cached.end())
         return -EBADR; // Should be cached after open() call
-
-    auto &node = it->second;
-    if (!node.isDirty())
-        return 0;
-
-    // node.getTransfer().markEnd(); // for async operations - not working, incomplete
-    // node.transferThread.join();
-    // node.setDirty(false);
-    auto api = fsMetadata.apiPool.acquire(); // for sync operations
-    api->upload(path, node.getCachedContent());
 
     fsMetadata.cached.erase(it); // memory cleanup
     MARCFS_MEMTRIM
@@ -146,7 +136,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     filler(dirhandle, "..", nullptr, 0);
 
     string pathStr(path); // e.g. /directory or /
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     auto contents = api->ls(pathStr);
     for (const CloudFile &cf : contents) {
         struct stat stbuf = {};
@@ -157,7 +147,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     return 0;
 }
 
-int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -178,10 +168,10 @@ int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, st
     
     // we're reading this file, try to pipe it from the cloud
     if (offsetBytes == 0) { // that's a start
-        auto api = fsMetadata.apiPool.acquire();
+        auto api = fsMetadata.clientPool.acquire();
         // set up async API transfer that will fill our queue
         // api object will return to the pool once download is complete
-        auto handle = bind(&API::downloadAsync, api, path, ref(node.getTransfer()));
+        auto handle = bind(&MarcRestClient::downloadAsync, api, path, ref(node.getTransfer()));
         thread(handle).detach();
 
         callRead();
@@ -197,7 +187,7 @@ int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, st
     return static_cast<int>(readNow);
 }
 
-int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info *fi)
+int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -209,9 +199,9 @@ int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t off
     vector<char> vec(buf, buf + size);
     // we're writing this file, try to send it chunked to the cloud
     if (offsetBytes == 0) { // that's a start
-        auto api = fsMetadata.apiPool.acquire();
+        auto api = fsMetadata.clientPool.acquire();
         // set up async API transfer that will fill our queue
-        auto handle = bind(&API::uploadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
+        auto handle = bind(&MarcRestClient::uploadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
         thread(handle).detach();
 
         node.getTransfer().push(vec); // actual transfer of bytes to the queue
@@ -229,7 +219,7 @@ int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t off
     return static_cast<int>(size);
 }
 
-int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info *fi)
+int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto it = fsMetadata.cached.find(path);
@@ -247,21 +237,34 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 }
 
 
-int flushCallback(const char *path, struct fuse_file_info *fi)
+int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 {
+    auto it = fsMetadata.cached.find(path);
+    if (it == fsMetadata.cached.end())
+        return -EBADR; // Should be cached after open() call
+
+    auto &node = it->second;
+    if (!node.isDirty())
+        return 0;
+
+    // node.getTransfer().markEnd(); // for async operations - not working, incomplete
+    // node.transferThread.join();
+    // node.setDirty(false);
+    auto api = fsMetadata.clientPool.acquire(); // for sync operations
+    api->upload(path, node.getCachedContent());
     return 0;
 }
 
 int mkdirCallback(const char *path, mode_t /*mode*/)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     api->mkdir(path);
     return 0;
 }
 
 int rmdirCallback(const char *path)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     auto contents = api->ls(path);
     if (!contents.empty())
         return -ENOTEMPTY;
@@ -273,14 +276,14 @@ int rmdirCallback(const char *path)
 
 int unlinkCallback(const char *path)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     api->remove(path);
     return 0;
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     api->rename(oldPath, newPath);
     return 0;
 }
@@ -298,7 +301,7 @@ int truncateCallback(const char *path, off_t size)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    auto api = fsMetadata.apiPool.acquire();
+    auto api = fsMetadata.clientPool.acquire();
     vector<char> tmp; // lvalue
     api->upload(path, tmp);
     return 0;

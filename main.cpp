@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     Account acc;
     acc.setLogin(conf.username);
     acc.setPassword(conf.password);
-    fsMetadata.apiPool.initialize(&API::login, acc);
+    fsMetadata.clientPool.initialize(&MarcRestClient::login, acc);
 
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};

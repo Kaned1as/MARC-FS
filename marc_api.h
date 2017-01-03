@@ -13,12 +13,12 @@
 
 #include <memory>
 
-class API
+class MarcRestClient
 {
 public:
     using Params = std::map<std::string, std::string>;
 
-    API();
+    MarcRestClient();
 
     /**
      * @brief API::login Sends auth info and initializes this API object on successful login.

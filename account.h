@@ -18,7 +18,7 @@ private:
     std::string login;
     std::string password;
 
-    friend class API;
+    friend class MarcRestClient;
 };
 
 #endif // ACCOUNT_H

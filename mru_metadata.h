@@ -9,12 +9,12 @@
 
 struct MruData {
 
-    MruData() : apiPool(1) {
+    MruData() : clientPool(1) {
 
     }
 
     std::map<std::string, MruNode> cached;
-    ObjectPool<API> apiPool;
+    ObjectPool<MarcRestClient> clientPool;
 };
 
 #endif // MRU_METADATA_H

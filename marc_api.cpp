@@ -39,7 +39,7 @@ static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
 
-string API::paramString(Params const &params)
+string MarcRestClient::paramString(Params const &params)
 {
     if(params.empty())
         return "";
@@ -62,7 +62,7 @@ string API::paramString(Params const &params)
     return s.str();
 }
 
-string API::performPost()
+string MarcRestClient::performPost()
 {
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
@@ -94,7 +94,7 @@ string API::performPost()
     return stream.str();
 }
 
-vector<char> API::performGet()
+vector<char> MarcRestClient::performGet()
 {
     vector<char> result;
 
@@ -133,7 +133,7 @@ vector<char> API::performGet()
     return result;
 }
 
-void API::performGetAsync(BlockingQueue<char> &p)
+void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
 {
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
@@ -164,7 +164,7 @@ void API::performGetAsync(BlockingQueue<char> &p)
     restClient->reset();
 }
 
-API::API()
+MarcRestClient::MarcRestClient()
     : restClient(make_unique<curl::curl_easy>()),
       cookieStore(*restClient)
 {
@@ -172,7 +172,7 @@ API::API()
     restClient->reset(); // reset debug->std:cout function
 }
 
-bool API::login(const Account &acc)
+bool MarcRestClient::login(const Account &acc)
 {
     if (acc.login.empty())
         throw MailApiException("Login not specified!");;
@@ -193,7 +193,7 @@ bool API::login(const Account &acc)
  * @brief API::authenticate - retrieves initial authentication cookies
  * @return true if cookies were successfully set, false otherwise
  */
-void API::authenticate()
+void MarcRestClient::authenticate()
 {
     // Login={0}&Domain={1}&Password={2}
 
@@ -214,7 +214,7 @@ void API::authenticate()
  * @brief API::obtainCloudCookie - retrieves basic cloud cookie that is needed for API exchange
  * @return true if cookie was successfully obtained, false otherwise
  */
-void API::obtainCloudCookie()
+void MarcRestClient::obtainCloudCookie()
 {
     curl_form form;
     form.add(NV_PAIR("from", string(CLOUD_DOMAIN + "/home")));
@@ -234,7 +234,7 @@ void API::obtainCloudCookie()
  * @brief API::obtainAuthToken - retrieve auth token. This is the first step in Mail.ru cloud API exchange
  * @return true if token was obtained, false otherwise
  */
-void API::obtainAuthToken()
+void MarcRestClient::obtainAuthToken()
 {
     curl_header header;
     header.add("Accept: application/json");
@@ -255,7 +255,7 @@ void API::obtainAuthToken()
     authToken = response["body"]["token"].asString();
 }
 
-Shard API::obtainShard(Shard::ShardType type)
+Shard MarcRestClient::obtainShard(Shard::ShardType type)
 {
     using Json::Value;
 
@@ -280,7 +280,7 @@ Shard API::obtainShard(Shard::ShardType type)
     throw MailApiException("Non-Shard json received: " + answer);
 }
 
-void API::addUploadedFile(string name, string remoteDir, string hashSize)
+void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashSize)
 {
     auto index = hashSize.find(';');
     auto endIndex = hashSize.find('\r');
@@ -310,7 +310,7 @@ void API::addUploadedFile(string name, string remoteDir, string hashSize)
     performPost();
 }
 
-void API::move(string whatToMove, string whereToMove)
+void MarcRestClient::move(string whatToMove, string whereToMove)
 {
     string postFields = paramString({
         {"api", "2"},
@@ -326,7 +326,7 @@ void API::move(string whatToMove, string whereToMove)
     performPost();
 }
 
-void API::remove(string remotePath)
+void MarcRestClient::remove(string remotePath)
 {
     string postFields = paramString({
         {"api", "2"},
@@ -340,7 +340,7 @@ void API::remove(string remotePath)
     performPost();
 }
 
-SpaceInfo API::df()
+SpaceInfo MarcRestClient::df()
 {
     curl_header header;
     header.add("Accept: application/json");
@@ -374,7 +374,7 @@ SpaceInfo API::df()
     return result;
 }
 
-void API::rename(string oldRemotePath, string newRemotePath)
+void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
 {
     string oldFilename = oldRemotePath.substr(oldRemotePath.find_last_of("/\\") + 1);
     string oldParentDir = oldRemotePath.substr(0, oldRemotePath.find_last_of("/\\") + 1);
@@ -403,7 +403,7 @@ void API::rename(string oldRemotePath, string newRemotePath)
     }
 }
 
-void API::upload(string remotePath, vector<char>& data)
+void MarcRestClient::upload(string remotePath, vector<char>& data)
 {
     if (data.empty()) {
         data.reserve(1); // make data pointer valid, no matter what
@@ -429,7 +429,7 @@ void API::upload(string remotePath, vector<char>& data)
     addUploadedFile(filename, parentDir, answer);
 }
 
-void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
+void MarcRestClient::uploadAsync(string remotePath, BlockingQueue<char> &p)
 {
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
 
@@ -467,7 +467,7 @@ void API::uploadAsync(string remotePath, BlockingQueue<char> &p)
     addUploadedFile(filename, parentDir, answer);
 }
 
-void API::mkdir(string remotePath)
+void MarcRestClient::mkdir(string remotePath)
 {
     string postFields = paramString({
         {"api", "2"},
@@ -482,7 +482,7 @@ void API::mkdir(string remotePath)
     performPost();
 }
 
-vector<CloudFile> API::ls(string remotePath)
+vector<CloudFile> MarcRestClient::ls(string remotePath)
 {
     curl_header header;
     header.add("Accept: application/json");
@@ -516,14 +516,14 @@ vector<CloudFile> API::ls(string remotePath)
     return results;
 }
 
-std::vector<char> API::download(string remotePath)
+std::vector<char> MarcRestClient::download(string remotePath)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     return performGet();
 }
 
-void API::downloadAsync(string remotePath, BlockingQueue<char> &p)
+void MarcRestClient::downloadAsync(string remotePath, BlockingQueue<char> &p)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
