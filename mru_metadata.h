@@ -9,7 +9,7 @@
 
 struct MruData {
 
-    MruData() : clientPool(1) {
+    MruData() : clientPool(0) {
 
     }
 

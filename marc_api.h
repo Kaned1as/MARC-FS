@@ -19,6 +19,12 @@ public:
     using Params = std::map<std::string, std::string>;
 
     MarcRestClient();
+    /**
+     * @brief MarcRestClient - for copying already authenticated rest client.
+     *                         copies account and cookies from the argument
+     * @param toCopy - readied client
+     */
+    MarcRestClient(MarcRestClient &toCopy);
 
     /**
      * @brief API::login Sends auth info and initializes this API object on successful login.
@@ -101,6 +107,7 @@ private:
     // api helpers
 
     // generic
+
     /**
      * @brief obtainShard obtains shard for next operation. It contains url to load-balanced
      *        host to which request will be sent
@@ -111,6 +118,7 @@ private:
     Shard obtainShard(Shard::ShardType type);
 
     // filesystem-related
+
     /**
      * @brief addUploadedFile adds uploaded file by hash to remote dir on cloud server.
      *        This operation is required after uploading a file because it makes a hard link
@@ -120,6 +128,7 @@ private:
      * @param hashSize hash and size of file delimited by colon
      */
     void addUploadedFile(std::string name, std::string remoteDir, std::string hashSize);
+
     /**
      * @brief move - moves file from one directory to another.
      *        This operation complements @fn rename call
@@ -142,11 +151,11 @@ private:
     void performGetAsync(BlockingQueue<char> &p);
     void performPostAsync(BlockingQueue<char> &p);
 
-    Account authAccount;
-    std::string authToken;
-
     std::unique_ptr<curl::curl_easy> restClient;
     curl::curl_cookie cookieStore;
+
+    Account authAccount;
+    std::string authToken;
 
     int64_t verbose = 0;
 };

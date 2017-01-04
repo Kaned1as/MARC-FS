@@ -8,6 +8,10 @@
 
 #include <iostream>
 
+/**
+ * Shared-pointer based object pool that readds objects that are no longer used.
+ * Thread-safe (I hope).
+ */
 template<typename T>
 class ObjectPool
 {
@@ -16,6 +20,16 @@ public:
     {
         for (size_t i = 0; i < num; ++i) {
             objects.emplace_back(std::shared_ptr<T>(new T(), ExternalDeleter(this)));
+        }
+    }
+
+    ObjectPool(T& obj, size_t number) {
+        populate(obj, number);
+    }
+
+    void populate(T& obj, size_t number) {
+        for (size_t i = 0; i < number; ++i) {
+            objects.emplace_back(std::shared_ptr<T>(new T(obj), ExternalDeleter(this)));
         }
     }
 
@@ -61,7 +75,6 @@ private:
     private:
         ObjectPool<T>* pool;
     };
-
 
     std::condition_variable condition;
     std::mutex acquire_mutex;

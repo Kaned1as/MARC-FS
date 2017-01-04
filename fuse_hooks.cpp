@@ -252,6 +252,7 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     // node.setDirty(false);
     auto api = fsMetadata.clientPool.acquire(); // for sync operations
     api->upload(path, node.getCachedContent());
+    node.setDirty(false);
     return 0;
 }
 

@@ -39,6 +39,29 @@ static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
 
+
+MarcRestClient::MarcRestClient()
+    : restClient(make_unique<curl::curl_easy>()),
+      cookieStore(*restClient)
+{
+    cookieStore.set_file(""); // init cookie engine
+    restClient->reset(); // reset debug->std:cout function
+}
+
+
+MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
+    : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
+      cookieStore(*restClient),        // cokie_store is not copyable, init in body
+      authAccount(toCopy.authAccount), // copy account from other one
+      authToken(toCopy.authToken) // copy auth token from other one
+
+{
+    for (const auto &c : toCopy.cookieStore.get()) {
+        restClient->add<CURLOPT_COOKIELIST>(c.data());
+    }
+    cookieStore.set_file(""); // init cookie engine
+}
+
 string MarcRestClient::paramString(Params const &params)
 {
     if(params.empty())
@@ -162,14 +185,6 @@ void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
 
     p.markEnd();
     restClient->reset();
-}
-
-MarcRestClient::MarcRestClient()
-    : restClient(make_unique<curl::curl_easy>()),
-      cookieStore(*restClient)
-{
-    cookieStore.set_file(""); // init cookie engine
-    restClient->reset(); // reset debug->std:cout function
 }
 
 bool MarcRestClient::login(const Account &acc)
@@ -415,11 +430,13 @@ void MarcRestClient::upload(string remotePath, vector<char>& data)
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
+    // fileupload part
+    // TODO: redo in CURLFORM_STREAM to reduce memory usage
     curl_form nameForm;
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_BUFFER, filename),
                  curl_pair<CURLformoption, char *>(CURLFORM_BUFFERPTR, &data[0]),
-                 curl_pair<CURLformoption, long>(CURLFORM_BUFFERLENGTH, static_cast<long>(data.size()))); // fileupload part
+                 curl_pair<CURLformoption, long>(CURLFORM_BUFFERLENGTH, static_cast<long>(data.size())));
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);

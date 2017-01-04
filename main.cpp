@@ -80,7 +80,9 @@ int main(int argc, char *argv[])
     Account acc;
     acc.setLogin(conf.username);
     acc.setPassword(conf.password);
-    fsMetadata.clientPool.initialize(&MarcRestClient::login, acc);
+    MarcRestClient rc;
+    rc.login(acc);
+    fsMetadata.clientPool.populate(rc, 5);
 
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};
@@ -100,11 +102,6 @@ int main(int argc, char *argv[])
     cloudfs_oper.statfs = &statfsCallback;
     cloudfs_oper.utime = &utimeCallback;
     cloudfs_oper.mknod = &mknodCallback;
-
-    //api.upload("863272.jpg", "/home/");
-    //api.mkdir("/newfolder");
-    //api.ls("/nah");
-    //api.download("/10r2005.png", "");
 
     // start!
     return fuse_main(args.argc, args.argv, &cloudfs_oper, nullptr);

@@ -6,6 +6,13 @@ Synopsis
 --------
 This is an implementation of a simple filesystem with all calls and hooks needed for normal file operations. After mounting it you'll be provided access to all your cloud files remotely stored on Mail.ru Cloud as if they were local ones. You should keep in mind that this is a network-driven FS and so it will never be as fast as any local one, but having a folder connected as remote drive in 9P/GNU Hurd fashion can be convenient at a times.
 
+Features
+--------
+
+- cloud storage is represented as local folder
+- rm, cp, ls, rmdir, touch, grep and so on are working
+- multithreaded, you can work with multiple files at once
+
 Installation
 ------------
 You should have cmake and g++ at hand.
@@ -21,7 +28,7 @@ MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. 
 
 API references
 --------------
-- There is no official Mail.ru Cloud API reference, everything is reverse-engineered. You may refer to [Doxygen API comments](https://gitlab.com/Kanedias/MailFuse/blob/master/marcfs_api.h) to grasp concept of what's going on.
+- There is no official Mail.ru Cloud API reference, everything is reverse-engineered. You may refer to [Doxygen API comments](https://gitlab.com/Kanedias/MARC-FS/blob/master/marc_api.h) to grasp concept of what's going on.
 - FUSE: [API overview](https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201109/homework/fuse/fuse_doc.html) - used to implement FS calls
 - cURL: [API overview](https://curl.haxx.se/docs/) - used to interact with Mail.ru Cloud REST API
 
@@ -36,11 +43,12 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - No multithreading at the moment
-  - No tests :(
-  - No support for files larger than 2GB (seriously dunno what would happen)
+  - No multithreading at the moment, not sure where it is needed
+  - no cache
+  - No encryption support
+  - No tests
 2. Principal (Mail.ru Cloud API limitations)
-  - No statfs support, you cannot determine how much place is left on cloud storage
+  - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
   - No extended attr/chmod support, all files on storage are owned by you
   - No atime/ctime support, only mtime is stored
   - No `Transfer-Encoding: chunked` support for POST **requests** in cloud nginx (`chunkin on`/`proxy_request_buffering` options in `nginx`/`tengine` config), so files are read fully into memory before uploading
