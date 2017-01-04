@@ -19,6 +19,7 @@ You should have cmake and g++ at hand.
 MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. Once you have all this, do as usual:
 
 
+    $ git clone --recursive https://gitlab.com/Kanedias/MARC-FS.git
     $ cd MarcFS
     $ mkdir build
     $ cd build && cmake ..
