@@ -307,3 +307,9 @@ int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
     api->upload(path, tmp);
     return 0;
 }
+
+int chmodCallback(const char */*path*/, mode_t /*mode*/)
+{
+    // stub, no access rights for your own cloud
+    return 0;
+}

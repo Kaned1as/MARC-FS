@@ -11,6 +11,7 @@ extern MruData fsMetadata;
 void * initCallback(struct fuse_conn_info *conn);
 
 int getattrCallback(const char *path, struct stat *stbuf);
+int chmodCallback (const char *path, mode_t mode);
 int statfsCallback(const char *path, struct statvfs *stat);
 /**
  * @note API doesn't support milliseconds, we only have seconds of mtime

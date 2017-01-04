@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
     cloudfs_oper.statfs = &statfsCallback;
     cloudfs_oper.utime = &utimeCallback;
     cloudfs_oper.mknod = &mknodCallback;
+    cloudfs_oper.chmod = &chmodCallback;
 
     // start!
     return fuse_main(args.argc, args.argv, &cloudfs_oper, nullptr);
