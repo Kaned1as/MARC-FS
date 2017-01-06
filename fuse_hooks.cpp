@@ -2,7 +2,7 @@
 
 #include <malloc.h>
 #include <cstring>
-#include <future>
+#include <thread>
 
 #define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024); // force OS to reclaim memory above 64KiB from us
 
@@ -49,12 +49,22 @@ int getattrCallback(const char *path, struct stat *stbuf)
         return 0;
     }
 
+    auto node = fsMetadata.getFile(path);
+    if (node) {
+        unique_lock<mutex> unlocker(node->getMutex(), adopt_lock); // unlock file mutex in case of exception
+        if (node->hasStat()) {
+            struct stat stats = node->getStat();
+            memcpy(stbuf, &stats, sizeof(struct stat));
+            return 0;
+        }
+    }
+
     auto slashPos = pathStr.find_last_of('/'); // that would be 5
     if (slashPos == string::npos)
         return -EIO;
 
     // find requested file on cloud
-    string dirname = pathStr.substr(0, slashPos); // /home
+    string dirname = pathStr.substr(0, slashPos + 1); // /home
     string filename = pathStr.substr(slashPos + 1);
     auto api = fsMetadata.clientPool.acquire();
     auto contents = api->ls(dirname); // actual API call - ls the directory that contains this file
@@ -65,6 +75,7 @@ int getattrCallback(const char *path, struct stat *stbuf)
     // file found - fill statbuf
     if (file != contents.cend()) {
         fillStats(stbuf, *file);
+        fsMetadata.putCacheStat(path, stbuf);
         return 0;
     }
 
@@ -104,27 +115,31 @@ int utimeCallback(const char */*path*/, utimbuf */*utime*/)
     return 0;
 }
 
+
+int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
+{
+    auto res = mknodCallback(path, mode, 0);
+    if (res)
+        return res;
+
+    return openCallback(path, fi);
+}
+
 int openCallback(const char *path, struct fuse_file_info *fi)
 {
     auto api = fsMetadata.clientPool.acquire();
-    fsMetadata.cached[path] = MruNode(); // create it for later use
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
-    if (fi->flags & (O_WRONLY | O_RDWR)) {
-        // file is supposedly opened for writing, we should cache it
-        // due to cloud API limitation
-        fsMetadata.cached[path].setCachedContent(api->download(path));
-    }
-
+    file->setCachedContent(api->download(path));
     return 0;
 }
 
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
-
-    fsMetadata.cached.erase(it); // memory cleanup
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    file->getCachedContent().resize(0); // forget contents of a node
     MARCFS_MEMTRIM
 
     return 0;
@@ -141,118 +156,143 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     for (const CloudFile &cf : contents) {
         struct stat stbuf = {};
         fillStats(&stbuf, cf);
+        if (cf.getType() == CloudFile::File) {
+            fsMetadata.putCacheStat(pathStr + "/" + cf.getName(), &stbuf);
+        }
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
 
     return 0;
 }
 
-int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
-{
-    auto offsetBytes = static_cast<uint64_t>(offset);
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
 
-    auto &node = it->second;
-    uint64_t readAlready = node.getTransferred(); // chunks that were already read
-    uint64_t readNow = 0;
-    auto callRead = [&]() {
-        while (!node.getTransfer().exhausted()) {
-            // get next chunk, possibly blocking
-            readNow += node.getTransfer().pop(buf + readNow, size - readNow); // actual transfer of bytes to the buffer
-            if (readNow == size) // reached limit
-                break;
-        }
-    };
+//int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
+//{
+//    auto offsetBytes = static_cast<uint64_t>(offset);
+//    uint64_t readNow = 0;
+//    auto callRead = [&](auto &pipe) {
+//        while (!pipe.exhausted()) {
+//            // get next chunk, possibly blocking
+//            readNow += pipe.pop(buf + readNow, size - readNow); // actual transfer of bytes to the buffer
+//            if (readNow == size) // reached limit
+//                break;
+//        }
+//    };
     
-    // we're reading this file, try to pipe it from the cloud
-    if (offsetBytes == 0) { // that's a start
-        auto api = fsMetadata.clientPool.acquire();
-        // set up async API transfer that will fill our queue
-        // api object will return to the pool once download is complete
-        auto handle = bind(&MarcRestClient::downloadAsync, api, path, ref(node.getTransfer()));
-        thread(handle).detach();
+//    // we're reading this file, try to pipe it from the cloud
+//    if (offsetBytes == 0) { // that's a start
+//        // set up async API transfer that will fill our queue
+//        // api object will return to the pool once download is complete
+//        auto &pipe = fsMetadata.createTransfer(path);
+//        auto handle = [&]() {
+//            auto api = fsMetadata.clientPool.acquire();
+//            auto file = fsMetadata.getOrCreateFile(path);
+//            unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // lock file till read is complete
+//            api->downloadAsync(path, pipe);
+//        };
+//        thread(handle).detach();
 
-        callRead();
-    } else if (offsetBytes == readAlready) { // that's continuation of previous call
-        // transfer must already been set, continue
-        callRead();
-    } else {
-        // attempt to read a file not sequentially, abort
-        return -EBADE;
-    }
+//        callRead(pipe);
+//    } else {
+//        auto &pipe = fsMetadata.getTransfer(path);
+//        if (offsetBytes == pipe.getTransferred()) { // that's continuation of previous call
+//        // transfer must already been set, continue
+//            callRead(pipe);
+//        } else {
+//            // attempt to read a file not sequentially, abort
+//            return -EBADE;
+//        }
+//    }
 
-    node.setTransferred(readAlready + readNow);
-    return static_cast<int>(readNow);
-}
+//    return static_cast<int>(readNow);
+//}
 
-int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info */*fi*/)
+// not working, see header file
+//int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info */*fi*/)
+//{
+//    auto offsetBytes = static_cast<uint64_t>(offset);
+//    auto &file = fsMetadata.obtainFile(path);
+//    unique_lock<mutex> unlocker(node->getMutex(), adopt_lock); // unlock file mutex in case of exception
+
+//    auto writtenAlready = file->getTransferred();
+//    vector<char> vec(buf, buf + size);
+//    // we're writing this file, try to send it chunked to the cloud
+//    if (offsetBytes == 0) { // that's a start
+//        auto api = fsMetadata.clientPool.acquire();
+//        // set up async API transfer that will fill our queue
+//        auto handle = bind(&MarcRestClient::uploadAsync, api.get(), path, ref(file->getTransfer()));
+//        thread(handle).detach();
+
+//        file->getTransfer().push(vec); // actual transfer of bytes to the queue
+//        file->setTransferred(writtenAlready + size);
+//    } else if (offsetBytes == writtenAlready) { // that's continuation of previous call
+//        // transfer must already been set, continue
+//        file->getTransfer().push(vec);
+//    } else {
+//        // attempt to write a file not sequentially, abort
+//        return -EBADE;
+//    }
+
+//    file->setDirty(true);
+//    file->setTransferred(writtenAlready + size);
+//    return static_cast<int>(size);
+//}
+
+int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
+    auto file = fsMetadata.getFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    auto &vec = file->getCachedContent();
+    auto len = vec.size();
+    if (offsetBytes > len)
+        return 0; // requested bytes above the size
 
-    auto &node = it->second;
-    auto writtenAlready = node.getTransferred();
-    vector<char> vec(buf, buf + size);
-    // we're writing this file, try to send it chunked to the cloud
-    if (offsetBytes == 0) { // that's a start
-        auto api = fsMetadata.clientPool.acquire();
-        // set up async API transfer that will fill our queue
-        auto handle = bind(&MarcRestClient::uploadAsync, api.get(), path, ref(node.getTransfer())); // TODO: returns API to the pool while download is still in progress!
-        thread(handle).detach();
-
-        node.getTransfer().push(vec); // actual transfer of bytes to the queue
-        node.setTransferred(writtenAlready + size);
-    } else if (offsetBytes == writtenAlready) { // that's continuation of previous call
-        // transfer must already been set, continue
-        node.getTransfer().push(vec);
-    } else {
-        // attempt to write a file not sequentially, abort
-        return -EBADE;
+    if (offsetBytes + size > len) {
+        // requested size is more than we have
+        memcpy(buf, &vec[0] + offsetBytes, len - offsetBytes);
+        return static_cast<int>(len - offsetBytes);
     }
 
-    node.setDirty(true);
-    node.setTransferred(writtenAlready + size);
+    // normal operation
+    memcpy(buf, vec.data() + offsetBytes, size);
     return static_cast<int>(size);
 }
 
 int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
-    auto &vec = it->second.getCachedContent();
+    auto &vec = file->getCachedContent();
     if (offsetBytes + size > vec.size()) {
         vec.resize(offsetBytes + size);
     }
 
     memcpy(&vec[offsetBytes], buf, size);
-    it->second.setDirty(true);
+    file->setDirty(true);
     return static_cast<int>(size);
 }
 
 
 int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
-    auto &node = it->second;
-    if (!node.isDirty())
+    if (!file->isDirty())
         return 0;
 
-    // node.getTransfer().markEnd(); // for async operations - not working, incomplete
-    // node.transferThread.join();
-    // node.setDirty(false);
     auto api = fsMetadata.clientPool.acquire(); // for sync operations
-    api->upload(path, node.getCachedContent());
-    node.setDirty(false);
+    api->upload(path, file->getCachedContent());
+
+    // update size of file
+    struct stat stats = file->getStat();
+    stats.st_size = static_cast<long>(file->getCachedContent().size());
+    file->setStat(stats);
+
+    file->setDirty(false);
     return 0;
 }
 
@@ -279,6 +319,7 @@ int unlinkCallback(const char *path)
 {
     auto api = fsMetadata.clientPool.acquire();
     api->remove(path);
+    fsMetadata.purgeCache(path);
     return 0;
 }
 
@@ -286,16 +327,17 @@ int renameCallback(const char *oldPath, const char *newPath)
 {
     auto api = fsMetadata.clientPool.acquire();
     api->rename(oldPath, newPath);
+    fsMetadata.purgeCache(oldPath);
+    fsMetadata.purgeCache(newPath);
     return 0;
 }
 
 int truncateCallback(const char *path, off_t size)
 {
-    auto it = fsMetadata.cached.find(path);
-    if (it == fsMetadata.cached.end())
-        return -EBADR; // Should be cached after open() call
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
-    auto &vec = it->second.getCachedContent();
+    auto &vec = file->getCachedContent();
     vec.resize(static_cast<uint64_t>(size));
     return 0;
 }

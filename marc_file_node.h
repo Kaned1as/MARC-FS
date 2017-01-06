@@ -1,19 +1,15 @@
-#ifndef MRU_NODE_H
-#define MRU_NODE_H
+#ifndef MARC_FILE_NODE_H
+#define MARC_FILE_NODE_H
 
 #include <vector>
 
-#include "blocking_queue.h"
+#include "marc_node.h"
 
-class MruNode
+class MarcFileNode : public MarcNode
 {
-    using Pipe = BlockingQueue<char>;
 public:
-    MruNode();
-    MruNode(std::vector<char> &&data);
-
-    Pipe& getTransfer();
-    void setTransfer(const Pipe &value);
+    MarcFileNode();
+    MarcFileNode(std::vector<char> &&data);
 
     uint64_t getTransferred() const;
     void setTransferred(const uint64_t &value);
@@ -27,15 +23,6 @@ public:
 
 private:
     /**
-     * @brief transfer field - used for long-running sequential writes
-     *        or reads of this node.
-     *
-     * We try to determine, whether file is read/written randomly or sequentially
-     * if latter, we don't load it fully in memory but use Pipe class and async API
-     * calls to transfer it efficiently.
-     */
-    std::unique_ptr<Pipe> transfer;
-    /**
      * @brief cachedContent - used for small files and random writes/reads
      *
      * If file is read/written at random locations, we try to cache it fully before
@@ -44,7 +31,7 @@ private:
     std::vector<char> cachedContent;
     /**
      * @brief transferred - number of bytes transferred so far. Needed for
-     *        sequential transfer, see @ref MruNode.transfer field.
+     *        sequential transfer, see @ref MarcFileNode.transfer field.
      */
     uint64_t transferred = 0;
     /**
@@ -53,4 +40,4 @@ private:
     bool dirty = false;
 };
 
-#endif // MRU_NODE_H
+#endif // MARC_FILE_NODE_H

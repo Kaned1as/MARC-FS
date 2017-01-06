@@ -27,6 +27,10 @@ public:
         populate(obj, number);
     }
 
+    ~ObjectPool() {
+        shuttingDown = true;
+    }
+
     void populate(T& obj, size_t number) {
         for (size_t i = 0; i < number; ++i) {
             objects.emplace_back(std::shared_ptr<T>(new T(obj), ExternalDeleter(this)));
@@ -68,8 +72,11 @@ private:
         : pool(pool) {}
 
         void operator()(T* ptr) {
-                pool->add(std::shared_ptr<T>(ptr, *this));
+            if (pool->shuttingDown)
                 return;
+
+            pool->add(std::shared_ptr<T>(ptr, *this));
+            return;
         }
 
     private:
@@ -79,6 +86,7 @@ private:
     std::condition_variable condition;
     std::mutex acquire_mutex;
 
+    bool shuttingDown = false;
     std::list<std::shared_ptr<T>> objects;
 };
 

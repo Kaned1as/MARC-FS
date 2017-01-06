@@ -27,13 +27,7 @@ public:
      */
     void push(K& value);
 
-    void push(T const&& value) {
-        {
-            std::unique_lock<std::mutex> lock(mutex);
-            queue.emplace_front(std::move(value));
-        }
-        condition.notify_one();
-    }
+    void push(T const&& value);
 
 
     void pop(K &target, size_t max);
@@ -47,6 +41,7 @@ public:
         size_t resultSize = std::min(queue.size(), max);
         std::copy_n(queue.begin(), resultSize, target);
         queue.erase(queue.begin(), queue.begin() + resultSize);
+        transferred += resultSize;
         return resultSize;
     }
 
@@ -58,11 +53,16 @@ public:
 
         T rc = queue.back();
         queue.pop_back();
+        transferred++;
         return rc;
     }
 
     bool exhausted() {
         return eof && queue.empty();
+    }
+
+    uint64_t getTransferred() const {
+        return transferred;
     }
 
     void markEnd() {
@@ -77,6 +77,8 @@ private:
     std::mutex mutex;
     std::condition_variable condition;
     std::deque<T> queue;
+
+    uint64_t transferred = 0;
     bool eof = false;
 };
 
@@ -91,6 +93,15 @@ void BlockingQueue<T, K>::push(K &value) {
 }
 
 template<typename T, typename K>
+void BlockingQueue<T, K>::push(const T &&value) {
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        queue.emplace_front(std::move(value));
+    }
+    condition.notify_one();
+}
+
+template<typename T, typename K>
 void BlockingQueue<T, K>::pop(K &target, size_t max) {
     std::unique_lock<std::mutex> lock(mutex);
     condition.wait(lock, [this]{ return !queue.empty() || eof; });
@@ -98,9 +109,10 @@ void BlockingQueue<T, K>::pop(K &target, size_t max) {
         return;
 
     size_t resultSize = std::min(queue.size(), max);
-    target.reserve(resultSize);
-    std::copy_n(queue.begin(), resultSize, target.data());
+    target.reserve(target.size() + resultSize);
+    std::copy_n(queue.begin(), resultSize, target.begin());
     queue.erase(queue.begin(), queue.begin() + resultSize);
+    transferred += resultSize;
 }
 
 #endif // BLOCKING_QUEUE_H
