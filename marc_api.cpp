@@ -150,7 +150,7 @@ vector<char> MarcRestClient::performGet()
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
-        throw MailApiException("non-success return code!");
+        throw MailApiException(string("non-success return code! Received data: ") + result.data());
 
     restClient->reset();
 
@@ -386,7 +386,7 @@ SpaceInfo MarcRestClient::df()
     Value &used = response["body"]["used"];
 
     result.totalMiB = total.asUInt64();
-    result.usedPercent = used.asUInt();
+    result.usedMiB = used.asUInt();
     return result;
 }
 
@@ -421,14 +421,18 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
 
 void MarcRestClient::upload(string remotePath, vector<char>& data)
 {
-    if (data.empty()) {
-        data.reserve(1); // make data pointer valid, no matter what
-    }
-
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
 
     string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
+
+    // zero size upload requested, skip upload part completely
+    if (data.empty()) {
+        // add zero file, special hash
+        addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000;0");
+        return;
+    }
+
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
     // fileupload part

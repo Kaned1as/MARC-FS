@@ -14,7 +14,7 @@
 struct SpaceInfo
 {
     size_t totalMiB = 0;
-    uint32_t usedPercent = 0;
+    uint32_t usedMiB = 0;
 };
 
 struct MailApiException : public std::exception {

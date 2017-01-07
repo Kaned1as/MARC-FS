@@ -13,6 +13,7 @@ static void fillStats(struct stat *stbuf, const CloudFile &cf) {
 
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
     stbuf->st_gid = ctx->gid;
+    stbuf->st_mtim.tv_sec = static_cast<long>(cf.getMtime());
     if (cf.getType() == CloudFile::Directory) { // is it a directory?
         stbuf->st_mode = S_IFDIR | 0700;
         stbuf->st_nlink = 2;
@@ -103,7 +104,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
     stat->f_fsid = {}; // ignored
     stat->f_bsize = 4096; // a guess!
     stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
-    stat->f_bfree = stat->f_blocks * (100 - info.usedPercent) / 100;
+    stat->f_bfree = stat->f_blocks - info.usedMiB * 256;
     stat->f_bavail = stat->f_bfree;
     stat->f_namemax = 256;
     return 0;
@@ -132,16 +133,6 @@ int openCallback(const char *path, struct fuse_file_info *fi)
     unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
     file->setCachedContent(api->download(path));
-    return 0;
-}
-
-int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
-{
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
-    file->getCachedContent().resize(0); // forget contents of a node
-    MARCFS_MEMTRIM
-
     return 0;
 }
 
@@ -293,6 +284,17 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     file->setStat(stats);
 
     file->setDirty(false);
+    return 0;
+}
+
+int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
+{
+    auto file = fsMetadata.getOrCreateFile(path);
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    file->getCachedContent().clear(); // forget contents of a node
+    file->getCachedContent().shrink_to_fit();
+    MARCFS_MEMTRIM
+
     return 0;
 }
 
