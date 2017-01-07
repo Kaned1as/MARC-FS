@@ -6,18 +6,20 @@ Synopsis
 --------
 This is an implementation of a simple filesystem with all calls and hooks needed for normal file operations. After mounting it you'll be provided access to all your cloud files remotely stored on Mail.ru Cloud as if they were local ones. You should keep in mind that this is a network-driven FS and so it will never be as fast as any local one, but having a folder connected as remote drive in 9P/GNU Hurd fashion can be convenient at a times.
 
+**Bear in mind that this project is still in its infancy, sudden errors/crashes/memory leaks may occur.**
+
 Features
 --------
 
 - cloud storage is represented as local folder
-- rm, cp, ls, rmdir, touch, grep and so on are working
+- `rm`, `cp`, `ls`, `rmdir`, `touch`, `grep` and so on are working
+- filesystem stats are working, can check with `df`
 - multithreaded, you can work with multiple files at once
 
 Installation
 ------------
 You should have cmake and g++ at hand.
 MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. Once you have all this, do as usual:
-
 
     $ git clone --recursive https://gitlab.com/Kanedias/MARC-FS.git
     $ cd MarcFS
@@ -26,6 +28,20 @@ MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. 
     $ make
     $ # here goes the step where you actually go and register on mail.ru website to obtain cloud storage and auth info
     $ ./marcfs /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
+
+If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncFS filesystem to achieve this:
+
+    $ ./marcfs /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
+    $ mkdir /path/to/empty/folder/encrypted # needed only once when you init your EncFS
+    $ encfs --no-default-flags /path/to/empty/folder/encrypted /path/to/decrypted/dir
+    $ cp whatever /path/to/decrypted/dir
+    $ # at this point encrypted data will appear in Mail.ru storage
+
+To unmount previously mounted share, make sure no one uses it and execute:
+
+    $ # if you mounted encfs previously, first unmount it
+    $ # fusermount -u /path/to/empty/folder/encrypted
+    $ fusermount -u /path/to/empty/folder
 
 API references
 --------------
@@ -44,9 +60,8 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - No multithreading at the moment, not sure where it is needed
-  - no cache
-  - No encryption support
+  - Caching could be better actually
+  - Crashes on first non-success return from REST API
   - No tests
 2. Principal (Mail.ru Cloud API limitations)
   - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
