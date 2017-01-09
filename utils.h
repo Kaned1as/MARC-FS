@@ -18,11 +18,24 @@ struct SpaceInfo
 };
 
 struct MailApiException : public std::exception {
-    MailApiException(std::string reason) : reason(reason) {}
+    MailApiException(std::string reason, int64_t responseCode)
+        : reason(reason),
+          httpResponseCode(responseCode)
+    {
+    }
+    MailApiException(std::string reason)
+        : reason(reason),
+          httpResponseCode(0)
+    {
+    }
 
     std::string reason;
+    int64_t httpResponseCode;
 
     virtual const char *what() const noexcept override;
+    int64_t getResponseCode() const {
+        return httpResponseCode;
+    }
 };
 
 void dump(const char *text, FILE *stream, unsigned char *ptr, size_t size, char nohex);

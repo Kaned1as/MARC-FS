@@ -2,7 +2,10 @@
 #define SHARD_H
 
 #include <string>
-#include <json/json.h>
+
+namespace Json {
+    class Value;
+}
 
 class Shard
 {
@@ -21,7 +24,7 @@ public:
         THUMBNAILS
     };
 
-    static std::string as_string(ShardType type) {
+    static std::string asString(ShardType type) {
         switch (type) {
             case ShardType::VIDEO: return "video";
             case ShardType::VIEW_DIRECT: return "view_direct";

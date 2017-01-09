@@ -1,8 +1,21 @@
 #include "marc_api_cloudfile.h"
 
+#include <json/value.h>
+
 CloudFile::CloudFile()
 {
 
+}
+
+CloudFile::CloudFile(const Json::Value &val) {
+    type = val["type"].asString() == "file" ? File : Directory;
+    kind = val["kind"].asString();
+    home = val["home"].asString();
+    name = val["name"].asString();
+    hash = val["hash"].asString();
+    size = val["size"].asUInt64();
+    mtime = val["mtime"].asUInt64();
+    virusScan = val["virus_scan"].asString();
 }
 
 CloudFile::Type CloudFile::getType() const

@@ -2,7 +2,10 @@
 #define CLOUDFILE_H
 
 #include <string>
-#include <json/value.h>
+
+namespace Json {
+    class Value;
+}
 
 /**
  * @brief The CloudFile class representation of the structure returned by ls API call
@@ -16,16 +19,7 @@ public:
     };
 
     CloudFile();
-    CloudFile(const Json::Value &val) {
-        type = val["type"].asString() == "file" ? File : Directory;
-        kind = val["kind"].asString();
-        home = val["home"].asString();
-        name = val["name"].asString();
-        hash = val["hash"].asString();
-        size = val["size"].asUInt64();
-        mtime = val["mtime"].asUInt64();
-        virusScan = val["virus_scan"].asString();
-    }
+    CloudFile(const Json::Value &val);
 
     Type getType() const;
     void setType(const Type &value);

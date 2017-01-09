@@ -11,8 +11,6 @@
 #include "blocking_queue.h"
 #include "utils.h"
 
-#include <memory>
-
 class MarcRestClient
 {
 public:

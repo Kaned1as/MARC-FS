@@ -3,9 +3,7 @@
 
 #include "marc_api.h"
 
-#include <numeric>
 #include <iterator>
-#include <string>
 
 #include <json/json.h>
 
@@ -38,6 +36,11 @@ static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
+
+struct ReadData {
+    char *data;
+    size_t readIdx;
+};
 
 
 MarcRestClient::MarcRestClient()
@@ -110,7 +113,7 @@ string MarcRestClient::performPost()
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) { // OK or redirect
-        throw MailApiException("non-success return code! Error message body: " + stream.str());
+        throw MailApiException("non-success return code! Error message body: " + stream.str(), ret);
     }
 
     restClient->reset();
@@ -150,7 +153,7 @@ vector<char> MarcRestClient::performGet()
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
-        throw MailApiException(string("non-success return code! Received data: ") + result.data());
+        throw MailApiException(string("non-success return code! Received data: ") + result.data(), ret);
 
     restClient->reset();
 
@@ -182,7 +185,7 @@ void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
-        throw MailApiException("non-success return code!");
+        throw MailApiException("non-success return code!", ret);
 
     p.markEnd();
     restClient->reset();
@@ -290,7 +293,7 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type)
         throw MailApiException("Error parsing shard response JSON");
 
     if (response["body"] != Value()) {
-        return Shard(response["body"][Shard::as_string(type)]);
+        return Shard(response["body"][Shard::asString(type)]);
     }
 
     throw MailApiException("Non-Shard json received: " + answer);
@@ -436,16 +439,24 @@ void MarcRestClient::upload(string remotePath, vector<char>& data)
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
     // fileupload part
-    // TODO: redo in CURLFORM_STREAM to reduce memory usage
     curl_form nameForm;
+    ReadData ptr {&data[0], 0};
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
-                 curl_pair<CURLformoption, string>(CURLFORM_BUFFER, filename),
-                 curl_pair<CURLformoption, char *>(CURLFORM_BUFFERPTR, &data[0]),
-                 curl_pair<CURLformoption, long>(CURLFORM_BUFFERLENGTH, static_cast<long>(data.size())));
+                 curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
+                 curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(data.size())));
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
+    restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
+        auto source = static_cast<ReadData *>(userp);
+        auto target = static_cast<char *>(contents);
+        const size_t requested = size * nmemb;
+        copy_n(&source->data[source->readIdx], requested, target);
+        source->readIdx += requested;
+        return requested;
+    });
     string answer = performPost();
 
     addUploadedFile(filename, parentDir, answer);
