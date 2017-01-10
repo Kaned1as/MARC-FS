@@ -32,10 +32,10 @@ public:
     bool login(const Account& acc);
 
     /**
-     * @brief upload uploads bytes in @param data to remote endpoint
+     * @brief upload uploads bytes in @param body to remote endpoint
      * @param remotePath remote path to folder where uploaded file should be (e.g. /newfolder)
      */
-    void upload(std::string remotePath, std::vector<char> &data);
+    void upload(std::string remotePath, std::vector<char> &body);
 
     /**
      * @brief uploadAsync - async version of @fn upload call

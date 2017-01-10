@@ -38,8 +38,8 @@ static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
 
 struct ReadData {
-    char *data;
-    size_t readIdx;
+    const vector<char> * const content;
+    size_t offset;
 };
 
 
@@ -422,7 +422,7 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
     }
 }
 
-void MarcRestClient::upload(string remotePath, vector<char>& data)
+void MarcRestClient::upload(string remotePath, vector<char>& body)
 {
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
 
@@ -430,7 +430,7 @@ void MarcRestClient::upload(string remotePath, vector<char>& data)
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     // zero size upload requested, skip upload part completely
-    if (data.empty()) {
+    if (body.empty()) {
         // add zero file, special hash
         addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000;0");
         return;
@@ -440,12 +440,13 @@ void MarcRestClient::upload(string remotePath, vector<char>& data)
 
     // fileupload part
     curl_form nameForm;
-    ReadData ptr {&data[0], 0};
+    ReadData ptr {&body, 0};
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
                  curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
-                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(data.size())));
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(body.size())));
 
+    // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
@@ -453,9 +454,11 @@ void MarcRestClient::upload(string remotePath, vector<char>& data)
         auto source = static_cast<ReadData *>(userp);
         auto target = static_cast<char *>(contents);
         const size_t requested = size * nmemb;
-        copy_n(&source->data[source->readIdx], requested, target);
-        source->readIdx += requested;
-        return requested;
+        const size_t available = source->content->size() - source->offset;
+        const size_t transferred = min(requested, available);
+        copy_n(&source->content->front() + source->offset, transferred, target);
+        source->offset += transferred;
+        return transferred;
     });
     string answer = performPost();
 
