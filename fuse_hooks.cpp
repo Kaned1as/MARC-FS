@@ -6,6 +6,17 @@
 
 #define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024); // force OS to reclaim memory above 64KiB from us
 
+#define API_CALL_TRY_BEGIN  \
+    try { \
+        auto client = fsMetadata.clientPool.acquire();
+
+#define API_CALL_TRY_FINISH \
+    } catch (MailApiException &exc) { \
+        if (exc.getResponseCode() == 500) \
+            return -EAGAIN; \
+        return -EIO;\
+    }
+
 using namespace std;
 
 static void fillStats(struct stat *stbuf, const CloudFile &cf) {
@@ -67,8 +78,11 @@ int getattrCallback(const char *path, struct stat *stbuf)
     // find requested file on cloud
     string dirname = pathStr.substr(0, slashPos + 1); // /home
     string filename = pathStr.substr(slashPos + 1);
-    auto api = fsMetadata.clientPool.acquire();
-    auto contents = api->ls(dirname); // actual API call - ls the directory that contains this file
+
+    // API call required
+    API_CALL_TRY_BEGIN
+    auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
+
     auto file = find_if(contents.cbegin(), contents.cend(), [&](const CloudFile &file) {
         return file.getName() == filename; // now find file in returned results
     });
@@ -79,6 +93,8 @@ int getattrCallback(const char *path, struct stat *stbuf)
         fsMetadata.putCacheStat(path, stbuf);
         return 0;
     }
+    API_CALL_TRY_FINISH
+
 
     // file not found
     return -ENOENT;
@@ -86,9 +102,6 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
 int statfsCallback(const char */*path*/, struct statvfs *stat)
 {
-    auto api = fsMetadata.clientPool.acquire();
-    auto info = api->df();
-
     /*
         uint32 f_bsize; // optimal transfer block size
         uint32 f_blocks; // total block count in fs
@@ -101,6 +114,8 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
         uint32 f_spare[6]; // reserved
     */
 
+    API_CALL_TRY_BEGIN
+    auto info = client->df();
     stat->f_fsid = {}; // ignored
     stat->f_bsize = 4096; // a guess!
     stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
@@ -108,6 +123,8 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
     stat->f_bavail = stat->f_bfree;
     stat->f_namemax = 256;
     return 0;
+    API_CALL_TRY_FINISH
+
 }
 
 int utimeCallback(const char */*path*/, utimbuf */*utime*/)
@@ -132,7 +149,10 @@ int openCallback(const char *path, struct fuse_file_info *fi)
     auto file = fsMetadata.getOrCreateFile(path);
     unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
-    file->setCachedContent(api->download(path));
+    API_CALL_TRY_BEGIN
+    file->setCachedContent(client->download(path));
+    API_CALL_TRY_FINISH
+
     return 0;
 }
 
@@ -142,8 +162,9 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     filler(dirhandle, "..", nullptr, 0);
 
     string pathStr(path); // e.g. /directory or /
-    auto api = fsMetadata.clientPool.acquire();
-    auto contents = api->ls(pathStr);
+
+    API_CALL_TRY_BEGIN
+    auto contents = client->ls(pathStr);
     for (const CloudFile &cf : contents) {
         struct stat stbuf = {};
         fillStats(&stbuf, cf);
@@ -152,6 +173,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         }
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
+    API_CALL_TRY_FINISH
 
     return 0;
 }
@@ -241,12 +263,12 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
 
     if (offsetBytes + size > len) {
         // requested size is more than we have
-        memcpy(buf, &vec[0] + offsetBytes, len - offsetBytes);
+        copy_n(&vec.front() + offsetBytes, len - offsetBytes, buf);
         return static_cast<int>(len - offsetBytes);
     }
 
     // normal operation
-    memcpy(buf, vec.data() + offsetBytes, size);
+    copy_n(&vec.front() + offsetBytes, size, buf);
     return static_cast<int>(size);
 }
 
@@ -261,7 +283,7 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
         vec.resize(offsetBytes + size);
     }
 
-    memcpy(&vec[offsetBytes], buf, size);
+    copy_n(buf, size, &vec.front() + offsetBytes);
     file->setDirty(true);
     return static_cast<int>(size);
 }
@@ -275,8 +297,8 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     if (!file->isDirty())
         return 0;
 
-    auto api = fsMetadata.clientPool.acquire(); // for sync operations
-    api->upload(path, file->getCachedContent());
+    API_CALL_TRY_BEGIN
+    client->upload(path, file->getCachedContent());
 
     // update size of file
     struct stat stats = file->getStat();
@@ -284,6 +306,8 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     file->setStat(stats);
 
     file->setDirty(false);
+    API_CALL_TRY_FINISH
+
     return 0;
 }
 
@@ -300,37 +324,43 @@ int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 
 int mkdirCallback(const char *path, mode_t /*mode*/)
 {
-    auto api = fsMetadata.clientPool.acquire();
-    api->mkdir(path);
+    API_CALL_TRY_BEGIN
+    client->mkdir(path);
+    API_CALL_TRY_FINISH
     return 0;
 }
 
 int rmdirCallback(const char *path)
 {
-    auto api = fsMetadata.clientPool.acquire();
-    auto contents = api->ls(path);
+    API_CALL_TRY_BEGIN
+    auto contents = client->ls(path);
     if (!contents.empty())
         return -ENOTEMPTY;
 
+    client->remove(path);
+    API_CALL_TRY_FINISH
 
-    api->remove(path);
     return 0;
 }
 
 int unlinkCallback(const char *path)
 {
-    auto api = fsMetadata.clientPool.acquire();
-    api->remove(path);
+    API_CALL_TRY_BEGIN
+    client->remove(path);
     fsMetadata.purgeCache(path);
+    API_CALL_TRY_FINISH
+
     return 0;
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
 {
-    auto api = fsMetadata.clientPool.acquire();
-    api->rename(oldPath, newPath);
+    API_CALL_TRY_BEGIN
+    client->rename(oldPath, newPath);
     fsMetadata.purgeCache(oldPath);
     fsMetadata.purgeCache(newPath);
+    API_CALL_TRY_FINISH
+
     return 0;
 }
 
@@ -346,9 +376,11 @@ int truncateCallback(const char *path, off_t size)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    auto api = fsMetadata.clientPool.acquire();
+    API_CALL_TRY_BEGIN
     vector<char> tmp; // lvalue
-    api->upload(path, tmp);
+    client->upload(path, tmp);
+    API_CALL_TRY_FINISH
+
     return 0;
 }
 

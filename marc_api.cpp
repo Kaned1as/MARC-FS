@@ -98,6 +98,7 @@ string MarcRestClient::performPost()
     header.add("Origin: " + CLOUD_DOMAIN);
 
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
@@ -107,7 +108,6 @@ string MarcRestClient::performPost()
     try {
         restClient->perform();
     } catch (curl::curl_easy_exception error) {
-        curl::curlcpp_traceback errors = error.get_traceback();
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");
     }
@@ -242,7 +242,6 @@ void MarcRestClient::obtainCloudCookie()
 
     restClient->add<CURLOPT_URL>(SCLD_COOKIE_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     performPost();
 
     if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
@@ -323,7 +322,6 @@ void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashS
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
@@ -340,7 +338,6 @@ void MarcRestClient::move(string whatToMove, string whereToMove)
     });
 
     restClient->add<CURLOPT_URL>(SCLD_MOVEFILE_ENDPOINT.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
@@ -354,7 +351,6 @@ void MarcRestClient::remove(string remotePath)
     });
 
     restClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
@@ -370,7 +366,6 @@ SpaceInfo MarcRestClient::df()
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answerJson = performPost();
 
@@ -410,7 +405,6 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
     });
 
     restClient->add<CURLOPT_URL>(SCLD_RENAMEFILE_ENDPOINT.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 
@@ -448,7 +442,6 @@ void MarcRestClient::upload(string remotePath, vector<char>& body)
 
     // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_URL>(uploadUrl.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto source = static_cast<ReadData *>(userp);
@@ -484,7 +477,6 @@ void MarcRestClient::uploadAsync(string remotePath, BlockingQueue<char> &p)
                  curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, 1)); // replace with CURLFORM_CONTENTLEN in future
     */
     restClient->add<CURLOPT_URL>(uploadUrl.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto result = static_cast<BlockingQueue<char> *>(userp);
@@ -513,7 +505,6 @@ void MarcRestClient::mkdir(string remotePath)
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
@@ -530,7 +521,6 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
     });
 
     restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answerJson = performPost();
 
