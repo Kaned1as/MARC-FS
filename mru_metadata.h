@@ -21,48 +21,23 @@ public:
      * @param path - path to a file
      * @return ptr to obtained file node
      */
-    MarcFileNode* getOrCreateFile(std::string path) {
-        std::lock_guard<std::mutex> lock(cacheLock);
-        return getOrCreateNode(path);
-    }
+    MarcFileNode* getOrCreateFile(std::string path);
 
     /**
      * @brief getFile - retrieve node if exists
      * @param path - path to a file
      * @return
      */
-    MarcFileNode* getFile(std::string path) {
-        std::lock_guard<std::mutex> lock(cacheLock);
-        return getNode(path);
-    }
+    MarcFileNode* getFile(std::string path);
 
     /**
      * @brief putCacheStat - write stat information to associated file/dir
      * @param path path to obtain node for
      * @param stat stat struct to apply
      */
-    void putCacheStat(std::string path, const struct stat *stat) {
-        std::lock_guard<std::mutex> lock(cacheLock);
-        auto node = getOrCreateNode(path);
-        std::unique_lock<std::mutex> unlocker(node->getMutex(), std::adopt_lock);
-        node->setStat(*stat);
-    }
+    void putCacheStat(std::string path, const struct stat *stat);
 
-    void purgeCache(std::string path) {
-        std::lock_guard<std::mutex> lock(cacheLock);
-        auto it = cache.find(path);
-
-        // node doesn't exist
-        if (it == cache.end())
-            return;
-
-        // node exists in cache, deal with it
-        // nobody can alter map now, we're holding cacheLock 
-        // but some thread may own file, wait for it to release
-        it->second->getMutex().lock(); // obtain lock, wait if necessary
-        it->second->getMutex().unlock();
-        cache.erase(it);
-    }
+    void purgeCache(std::string path);
 private:
     /**
      * @brief getNode - retrieves cached node or creates it,

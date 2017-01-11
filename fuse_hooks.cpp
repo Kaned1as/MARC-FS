@@ -4,7 +4,11 @@
 #include <cstring>
 #include <thread>
 
-#define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024); // force OS to reclaim memory above 64KiB from us
+/**
+ * force OS to reclaim memory above 64KiB from us
+ * @note Bear in mind that trim doesn't free data int the middle of the heap!
+ */
+#define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024);
 
 #define API_CALL_TRY_BEGIN  \
     try { \
@@ -36,7 +40,7 @@ static void fillStats(struct stat *stbuf, const CloudFile &cf) {
 };
 
 
-void *initCallback(fuse_conn_info *conn)
+void * initCallback(fuse_conn_info *conn)
 {
     conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
 
@@ -55,15 +59,16 @@ int getattrCallback(const char *path, struct stat *stbuf)
 {
     // retrieve path to containing dir
     string pathStr(path); // e.g. /home/1517.svg
-    if (pathStr == "/") {
+    if (pathStr == "/") { // special handling for root
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
         return 0;
     }
 
+    // try to retrieve it from cache
     auto node = fsMetadata.getFile(path);
-    if (node) {
-        unique_lock<mutex> unlocker(node->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    if (node) { // have this file in cachem get stat
+        unique_lock<mutex> unlocker(node->getMutex(), adopt_lock);
         if (node->hasStat()) {
             struct stat stats = node->getStat();
             memcpy(stbuf, &stats, sizeof(struct stat));
@@ -71,13 +76,14 @@ int getattrCallback(const char *path, struct stat *stbuf)
         }
     }
 
-    auto slashPos = pathStr.find_last_of('/'); // that would be 5
+    // not found in cache, find requested file on cloud
+    auto slashPos = pathStr.find_last_of('/'); // that would be 5 for /home/1517.svg
     if (slashPos == string::npos)
         return -EIO;
 
-    // find requested file on cloud
-    string dirname = pathStr.substr(0, slashPos + 1); // /home
-    string filename = pathStr.substr(slashPos + 1);
+    // get containing dir name
+    string dirname = pathStr.substr(0, slashPos + 1); // that would be /home
+    string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
 
     // API call required
     API_CALL_TRY_BEGIN
@@ -102,17 +108,17 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
 int statfsCallback(const char */*path*/, struct statvfs *stat)
 {
-    /*
-        uint32 f_bsize; // optimal transfer block size
-        uint32 f_blocks; // total block count in fs
-        uint32 f_bfree; // free block count in fs
-        uint32 f_bavail; // free block count available for non-root
-        uint32 f_files; // total node count in filesystem
-        uint32 f_ffree; // free node count in filesystem
-        struct { int sid[2]; } f_fsid; // ids - major, minor of filesystem
-        uint32 f_namelen; // maximum file naming length
-        uint32 f_spare[6]; // reserved
-    */
+    /**
+     *   uint32 f_bsize; // optimal transfer block size
+     *   uint32 f_blocks; // total block count in fs
+     *   uint32 f_bfree; // free block count in fs
+     *   uint32 f_bavail; // free block count available for non-root
+     *   uint32 f_files; // total node count in filesystem
+     *   uint32 f_ffree; // free node count in filesystem
+     *   struct { int sid[2]; } f_fsid; // ids - major, minor of filesystem
+     *   uint32 f_namelen; // maximum file naming length
+     *   uint32 f_spare[6]; // reserved
+     */
 
     API_CALL_TRY_BEGIN
     auto info = client->df();
@@ -129,6 +135,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 int utimeCallback(const char */*path*/, utimbuf */*utime*/)
 {
+    // API doesn't support utime, only seconds
     // stub
     return 0;
 }
@@ -143,11 +150,11 @@ int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
     return openCallback(path, fi);
 }
 
-int openCallback(const char *path, struct fuse_file_info *fi)
+int openCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto api = fsMetadata.clientPool.acquire();
     auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
 
     API_CALL_TRY_BEGIN
     file->setCachedContent(client->download(path));
@@ -255,7 +262,7 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto file = fsMetadata.getFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
     auto &vec = file->getCachedContent();
     auto len = vec.size();
     if (offsetBytes > len)
@@ -276,7 +283,7 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
 
     auto &vec = file->getCachedContent();
     if (offsetBytes + size > vec.size()) {
@@ -292,7 +299,7 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
 
     if (!file->isDirty())
         return 0;
@@ -314,7 +321,7 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
     file->getCachedContent().clear(); // forget contents of a node
     file->getCachedContent().shrink_to_fit();
     MARCFS_MEMTRIM
@@ -367,7 +374,7 @@ int renameCallback(const char *oldPath, const char *newPath)
 int truncateCallback(const char *path, off_t size)
 {
     auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // unlock file mutex in case of exception
+    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
 
     auto &vec = file->getCachedContent();
     vec.resize(static_cast<uint64_t>(size));

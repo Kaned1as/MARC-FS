@@ -97,6 +97,7 @@ string MarcRestClient::performPost()
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
 
+    ScopeGuard resetter = [&]() { restClient->reset(); };
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
@@ -116,8 +117,6 @@ string MarcRestClient::performPost()
         throw MailApiException("non-success return code! Error message body: " + stream.str(), ret);
     }
 
-    restClient->reset();
-
     return stream.str();
 }
 
@@ -129,6 +128,7 @@ vector<char> MarcRestClient::performGet()
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
 
+    ScopeGuard resetter = [&]() { restClient->reset(); };
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);

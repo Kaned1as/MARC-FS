@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <functional>
 #include <curl_info.h>
 
 #include "object_pool.h"
@@ -17,6 +18,11 @@ struct SpaceInfo
     uint32_t usedMiB = 0;
 };
 
+/**
+ * @brief The MailApiException struct - exception used to indicate that Cloud REST API
+ *        intercommunication failed for some reason.
+ * @see MarcRestClient
+ */
 struct MailApiException : public std::exception {
     MailApiException(std::string reason, int64_t responseCode)
         : reason(reason),
@@ -37,6 +43,39 @@ struct MailApiException : public std::exception {
         return httpResponseCode;
     }
 };
+
+/**
+ * @brief The ScopeGuard class - `defer`/`finally` pattern implementation from Go/Java
+ *
+ * @note taken from http://stackoverflow.com/questions/10270328/the-simplest-and-neatest-c11-scopeguard
+ *
+ * Used to do essential cleanup in case of throw or return from the function.
+ * Will always run the function passed after scope where it resides is closed.
+ */
+class ScopeGuard {
+public:
+    template<class Callable>
+    ScopeGuard(Callable && scopeCloseFunc) : func(std::forward<Callable>(scopeCloseFunc)) {}
+
+    ScopeGuard(ScopeGuard && other) : func(std::move(other.func)) {
+        other.func = nullptr;
+    }
+
+    ~ScopeGuard() {
+        if(func) func(); // must not throw
+    }
+
+    void dismiss() noexcept {
+        func = nullptr;
+    }
+
+    ScopeGuard(const ScopeGuard&) = delete;
+    void operator = (const ScopeGuard&) = delete;
+
+private:
+    std::function<void()> func;
+};
+
 
 void dump(const char *text, FILE *stream, unsigned char *ptr, size_t size, char nohex);
 int trace_post(CURL *handle, curl_infotype type, char *data, size_t size, void *userp);
