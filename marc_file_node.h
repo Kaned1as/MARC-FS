@@ -11,17 +11,22 @@ public:
     MarcFileNode();
     MarcFileNode(std::vector<char> &&data);
 
+    void fillStats(struct stat *stbuf) const override;
+
     uint64_t getTransferred() const;
     void setTransferred(const uint64_t &value);
 
     bool isDirty() const;
     void setDirty(bool value);
 
+    void setSize(size_t size);
+
     std::vector<char>& getCachedContent();
     void setCachedContent(const std::vector<char> &value);
     void setCachedContent(const std::vector<char> &&value);
 
 private:
+    size_t getSize() const;
     /**
      * @brief cachedContent - used for small files and random writes/reads
      *
@@ -38,6 +43,8 @@ private:
      * @brief dirty - used to indicate whether subsequent upload is needed
      */
     bool dirty = false;
+
+    size_t size = 0;
 };
 
 #endif // MARC_FILE_NODE_H

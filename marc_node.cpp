@@ -1,6 +1,6 @@
 #include "marc_node.h"
 
-static const time_t STAT_CACHE_SEC = 20;
+#include "utils.h"
 
 MarcNode::MarcNode()
 {
@@ -12,36 +12,25 @@ MarcNode::~MarcNode()
 
 }
 
-time_t MarcNode::getLastUpdated() const
+void MarcNode::setMtime(time_t time)
 {
-    return lastUpdated;
+    this->mtime = time;
 }
 
-void MarcNode::setLastUpdated(const time_t &value)
+bool MarcNode::exists() const
 {
-    lastUpdated = value;
+    return true;
 }
 
-bool MarcNode::hasStat() const
+void MarcNode::fillStats(struct stat *stbuf) const
 {
-    if (!statSet)
-        return false;
+    if (!exists())
+        throw std::invalid_argument("Tried to fill stats from non-existing file!");
 
-    // check expiration also
-    time_t current = std::time(nullptr);
-    return current - lastUpdated < STAT_CACHE_SEC;
-}
-
-struct stat MarcNode::getStat() const
-{
-    return stat;
-}
-
-void MarcNode::setStat(const struct stat &value)
-{
-    lastUpdated = std::time(nullptr);
-    statSet = true;
-    stat = value;
+    auto ctx = fuse_get_context();
+    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
+    stbuf->st_gid = ctx->gid;
+    stbuf->st_mtim.tv_sec = mtime;
 }
 
 std::mutex& MarcNode::getMutex()

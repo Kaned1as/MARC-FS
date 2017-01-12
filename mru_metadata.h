@@ -3,9 +3,38 @@
 
 #include <map>
 #include <vector>
+
 #include "object_pool.h"
 #include "marc_api.h"
 #include "marc_file_node.h"
+#include "marc_dir_node.h"
+#include "marc_dummy_node.h"
+
+class CloudFile;
+
+template <typename T>
+struct LockHolder {
+    LockHolder()
+        : content(nullptr), scopeLock()
+    {
+    }
+
+    explicit LockHolder(T* node)
+        : content(node), scopeLock(node->getMutex())
+    {
+    }
+
+    T* operator->() const noexcept {
+      return content;
+    }
+
+    operator bool() const {
+        return content;
+    }
+
+    T* content;
+    std::unique_lock<std::mutex> scopeLock;
+};
 
 class MruData {
 public:
@@ -21,54 +50,61 @@ public:
      * @param path - path to a file
      * @return ptr to obtained file node
      */
-    MarcFileNode* getOrCreateFile(std::string path);
+    LockHolder<MarcFileNode> getOrCreateFile(std::string path);
+    LockHolder<MarcDirNode> getOrCreateDir(std::string path);
 
-    /**
-     * @brief getFile - retrieve node if exists
-     * @param path - path to a file
-     * @return
-     */
-    MarcFileNode* getFile(std::string path);
+    template<typename T>
+    LockHolder<T> getNode(std::string path) {
+        std::lock_guard<std::mutex> lock(cacheLock);
+        auto it = cache.find(path);
+        if (it != cache.end()) {
+            T *node = dynamic_cast<T*>(it->second.get());
+            if (!node)
+                throw std::invalid_argument("Expected another type in node " + path);
+
+            return LockHolder<T>(node);
+        }
+
+        return LockHolder<T>();
+    }
 
     /**
      * @brief putCacheStat - write stat information to associated file/dir
      * @param path path to obtain node for
      * @param stat stat struct to apply
      */
-    void putCacheStat(std::string path, const struct stat *stat);
+    void putCacheStat(std::string path, const CloudFile *cf);
 
     void purgeCache(std::string path);
 private:
-    /**
-     * @brief getNode - retrieves cached node or creates it,
-     *        locking its mutex to calling thread
-     * @note called with a @ref cacheLock held
-     * @param path path to query
-     * @return filenode pointer
-     */
-    MarcFileNode* getOrCreateNode(std::string path) {
+
+    MarcFileNode* getOrCreateFileNode(std::string path) {
         auto it = cache.find(path);
         if (it == cache.end()) {
             cache.emplace(path, std::make_unique<MarcFileNode>());
         }
-        auto &node = cache[path];
-        node->getMutex().lock();
-        return node.get();
+        auto node = cache[path].get();
+        return dynamic_cast<MarcFileNode*>(node);
     }
 
-    MarcFileNode* getNode(std::string path) {
+    MarcDirNode* getOrCreateDirNode(std::string path) {
         auto it = cache.find(path);
-        if (it != cache.end()) {
-            it->second->getMutex().lock();
-            return it->second.get();
+        if (it == cache.end()) {
+            cache.emplace(path, std::make_unique<MarcDirNode>());
         }
-        return nullptr;
+        auto node = cache[path].get();
+        return dynamic_cast<MarcDirNode*>(node);
     }
+
+    void purgeNode(std::string path);
 
     /**
      * @brief cache field - cached filenodes
      */
-    std::map<std::string, std::unique_ptr<MarcFileNode>> cache;
+    std::map<std::string, std::unique_ptr<MarcNode>> cache;
+    /**
+     * @brief cacheLock - lock for changing cache structure
+     */
     std::mutex cacheLock;
 };
 

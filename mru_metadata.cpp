@@ -1,24 +1,54 @@
 #include "mru_metadata.h"
 
-MarcFileNode *MruData::getOrCreateFile(std::__cxx11::string path) {
+#include "marc_api_cloudfile.h"
+
+LockHolder<MarcFileNode> MruData::getOrCreateFile(std::string path) {
     std::lock_guard<std::mutex> lock(cacheLock);
-    return getOrCreateNode(path);
+    auto file = getOrCreateFileNode(path);
+
+    return LockHolder<MarcFileNode>(file);
 }
 
-MarcFileNode *MruData::getFile(std::__cxx11::string path) {
+LockHolder<MarcDirNode> MruData::getOrCreateDir(std::string path) {
     std::lock_guard<std::mutex> lock(cacheLock);
-    return getNode(path);
+    auto dir = getOrCreateDirNode(path);
+
+    dir->getMutex().lock();
+    return LockHolder<MarcDirNode>(dir);
 }
 
-void MruData::putCacheStat(std::__cxx11::string path, const struct stat *stat) {
+void MruData::putCacheStat(std::string path, const CloudFile *cf) {
     std::lock_guard<std::mutex> lock(cacheLock);
-    auto node = getOrCreateNode(path);
-    std::unique_lock<std::mutex> unlocker(node->getMutex(), std::adopt_lock);
-    node->setStat(*stat);
+    if (!cf) {
+        // mark non-existing
+        purgeNode(path);
+        cache[path] = std::make_unique<MarcDummyNode>();
+        return;
+    }
+
+    MarcNode *node;
+    switch (cf->getType()) {
+        case CloudFile::File: {
+            auto file = getOrCreateFileNode(path);
+            file->setSize(cf->getSize());
+            node = file;
+            break;
+        }
+        case CloudFile::Directory: {
+            node = getOrCreateDirNode(path);
+            break;
+        }
+    }
+    node->setMtime(static_cast<time_t>(cf->getMtime()));
 }
 
-void MruData::purgeCache(std::__cxx11::string path) {
+void MruData::purgeCache(std::string path) {
     std::lock_guard<std::mutex> lock(cacheLock);
+    purgeNode(path);
+}
+
+void MruData::purgeNode(std::string path)
+{
     auto it = cache.find(path);
 
     // node doesn't exist

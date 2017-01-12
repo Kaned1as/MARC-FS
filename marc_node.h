@@ -13,22 +13,17 @@ public:
     MarcNode();
     virtual ~MarcNode();
 
-    time_t getLastUpdated() const;
-    void setLastUpdated(const time_t &value);
+    void setMtime(time_t time);
 
-    bool hasStat() const;
-    struct stat getStat() const;
-    void setStat(const struct stat &value);
+    virtual bool exists() const;
+    virtual void fillStats(struct stat *stbuf) const;
 
     std::mutex& getMutex();
 
 private:
     std::mutex mutex;
 
-    time_t lastUpdated = 0;
-
-    bool statSet = false;
-    struct stat stat = {};
+    time_t mtime = 0;
 };
 
 #endif // MARC_NODE_H

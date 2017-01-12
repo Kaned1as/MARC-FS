@@ -331,7 +331,7 @@ void MarcRestClient::move(string whatToMove, string whereToMove)
 {
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rewrite"},  // rewrite is one more discovered option
+        {"conflict", "rewrite"},  // rename is one more discovered option
         {"folder", whereToMove},
         {"home", whatToMove},
         {"token", authToken}

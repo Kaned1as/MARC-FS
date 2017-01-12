@@ -23,22 +23,6 @@
 
 using namespace std;
 
-static void fillStats(struct stat *stbuf, const CloudFile &cf) {
-    auto ctx = fuse_get_context();
-
-    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
-    stbuf->st_gid = ctx->gid;
-    stbuf->st_mtim.tv_sec = static_cast<long>(cf.getMtime());
-    if (cf.getType() == CloudFile::Directory) { // is it a directory?
-        stbuf->st_mode = S_IFDIR | 0700;
-        stbuf->st_nlink = 2;
-    } else if (cf.getType() == CloudFile::File) { // or a file?
-        stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
-        stbuf->st_nlink = 1;
-        stbuf->st_size = static_cast<off_t>(cf.getSize()); // offset is 32 bit on x86 platforms
-    }
-};
-
 
 void * initCallback(fuse_conn_info *conn)
 {
@@ -66,14 +50,13 @@ int getattrCallback(const char *path, struct stat *stbuf)
     }
 
     // try to retrieve it from cache
-    auto node = fsMetadata.getFile(path);
-    if (node) { // have this file in cachem get stat
-        unique_lock<mutex> unlocker(node->getMutex(), adopt_lock);
-        if (node->hasStat()) {
-            struct stat stats = node->getStat();
-            memcpy(stbuf, &stats, sizeof(struct stat));
-            return 0;
-        }
+    auto node = fsMetadata.getNode<MarcNode>(path);
+    if (node) { // have this file in cache get stat
+        if (!node->exists())
+            return -ENOENT;
+
+        node->fillStats(stbuf);
+        return 0;
     }
 
     // not found in cache, find requested file on cloud
@@ -95,14 +78,15 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
     // file found - fill statbuf
     if (file != contents.cend()) {
-        fillStats(stbuf, *file);
-        fsMetadata.putCacheStat(path, stbuf);
+        fsMetadata.putCacheStat(path, &(*file));
+        fsMetadata.getNode<MarcNode>(path)->fillStats(stbuf);
         return 0;
     }
     API_CALL_TRY_FINISH
 
 
     // file not found
+    fsMetadata.putCacheStat(path, nullptr);
     return -ENOENT;
 }
 
@@ -153,8 +137,8 @@ int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
 int openCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto api = fsMetadata.clientPool.acquire();
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    // file shoupd already be present as FUSE does /getattr call prior to open
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
 
     API_CALL_TRY_BEGIN
     file->setCachedContent(client->download(path));
@@ -173,11 +157,10 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     API_CALL_TRY_BEGIN
     auto contents = client->ls(pathStr);
     for (const CloudFile &cf : contents) {
+        string fullPath = pathStr + "/" + cf.getName();
         struct stat stbuf = {};
-        fillStats(&stbuf, cf);
-        if (cf.getType() == CloudFile::File) {
-            fsMetadata.putCacheStat(pathStr + "/" + cf.getName(), &stbuf);
-        }
+        fsMetadata.putCacheStat(fullPath, &cf);
+        fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
     API_CALL_TRY_FINISH
@@ -207,7 +190,6 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 //        auto handle = [&]() {
 //            auto api = fsMetadata.clientPool.acquire();
 //            auto file = fsMetadata.getOrCreateFile(path);
-//            unique_lock<mutex> unlocker(file->getMutex(), adopt_lock); // lock file till read is complete
 //            api->downloadAsync(path, pipe);
 //        };
 //        thread(handle).detach();
@@ -232,7 +214,6 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 //{
 //    auto offsetBytes = static_cast<uint64_t>(offset);
 //    auto &file = fsMetadata.obtainFile(path);
-//    unique_lock<mutex> unlocker(node->getMutex(), adopt_lock); // unlock file mutex in case of exception
 
 //    auto writtenAlready = file->getTransferred();
 //    vector<char> vec(buf, buf + size);
@@ -261,8 +242,8 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto file = fsMetadata.getFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
+
     auto &vec = file->getCachedContent();
     auto len = vec.size();
     if (offsetBytes > len)
@@ -282,8 +263,7 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
 int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
 
     auto &vec = file->getCachedContent();
     if (offsetBytes + size > vec.size()) {
@@ -298,19 +278,13 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 
 int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    auto file = fsMetadata.getNode<MarcFileNode>(path); // present as we opened it earlier
 
     if (!file->isDirty())
         return 0;
 
     API_CALL_TRY_BEGIN
     client->upload(path, file->getCachedContent());
-
-    // update size of file
-    struct stat stats = file->getStat();
-    stats.st_size = static_cast<long>(file->getCachedContent().size());
-    file->setStat(stats);
 
     file->setDirty(false);
     API_CALL_TRY_FINISH
@@ -320,8 +294,7 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
     file->getCachedContent().clear(); // forget contents of a node
     file->getCachedContent().shrink_to_fit();
     MARCFS_MEMTRIM
@@ -345,6 +318,7 @@ int rmdirCallback(const char *path)
         return -ENOTEMPTY;
 
     client->remove(path);
+    fsMetadata.purgeCache(path);
     API_CALL_TRY_FINISH
 
     return 0;
@@ -373,8 +347,7 @@ int renameCallback(const char *oldPath, const char *newPath)
 
 int truncateCallback(const char *path, off_t size)
 {
-    auto file = fsMetadata.getOrCreateFile(path);
-    unique_lock<mutex> unlocker(file->getMutex(), adopt_lock);
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
 
     auto &vec = file->getCachedContent();
     vec.resize(static_cast<uint64_t>(size));
