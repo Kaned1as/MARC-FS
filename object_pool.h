@@ -16,17 +16,6 @@ template<typename T>
 class ObjectPool
 {
 public:
-    ObjectPool(size_t num)
-    {
-        for (size_t i = 0; i < num; ++i) {
-            objects.emplace_back(std::shared_ptr<T>(new T(), ExternalDeleter(this)));
-        }
-    }
-
-    ObjectPool(T& obj, size_t number) {
-        populate(obj, number);
-    }
-
     ~ObjectPool() {
         shuttingDown = true;
     }
@@ -48,7 +37,6 @@ public:
     std::shared_ptr<T> acquire() {
         {
             std::unique_lock<std::mutex> lock(acquire_mutex);
-            std::cout << "Acquiring API object..." << std::endl;
             condition.wait(lock, [this]{ return !objects.empty(); });
             auto tmp = std::move(objects.front());
             objects.pop_front();
@@ -59,7 +47,6 @@ public:
     void add(std::shared_ptr<T> obj) {
         {
             std::unique_lock<std::mutex> lock(acquire_mutex);
-            std::cout << "Returning API object to the pool..." << std::endl;
             objects.emplace_back(std::move(obj));
         }
         condition.notify_one();

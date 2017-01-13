@@ -4,6 +4,9 @@
 #include <cstring>
 #include <thread>
 
+#include "marc_file_node.h"
+#include "marc_dir_node.h"
+
 /**
  * force OS to reclaim memory above 64KiB from us
  * @note Bear in mind that trim doesn't free data int the middle of the heap!
