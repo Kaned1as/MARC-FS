@@ -12,6 +12,9 @@
 
 class CloudFile;
 
+/**
+ * Helper class to wrap file-based locking transparently
+ */
 template <typename T>
 struct LockHolder {
     LockHolder()
@@ -45,14 +48,10 @@ public:
     ObjectPool<MarcRestClient> clientPool;
 
     /**
-     * @brief obtainFile - do everything needed to create node at specified
-     *        path and lock it to our thread.
+     * @brief obtainFile - retrieves node if it exists
      * @param path - path to a file
      * @return ptr to obtained file node
      */
-    LockHolder<MarcFileNode> getOrCreateFile(std::string path);
-    LockHolder<MarcDirNode> getOrCreateDir(std::string path);
-
     template<typename T>
     LockHolder<T> getNode(std::string path) {
         std::lock_guard<std::mutex> lock(cacheLock);
@@ -74,7 +73,24 @@ public:
      * @param stat stat struct to apply
      */
     void putCacheStat(std::string path, const CloudFile *cf);
+    /**
+     * @brief createFile - create cached file node, possibly replacing negative cache
+     * @param path path to create node for
+     */
+    template<typename T>
+    void create(std::string path) {
+        std::lock_guard<std::mutex> lock(cacheLock);
+        auto it = cache.find(path);
+        if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
+            throw std::invalid_argument("Cache already contains node at path " + path);
 
+        cache[path] = std::make_unique<T>();
+    }
+
+    /**
+     * @brief purgeCache - erase cache at specified path
+     * @param path path to clear cache for
+     */
     void purgeCache(std::string path);
 private:
 

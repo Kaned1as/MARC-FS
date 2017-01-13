@@ -153,7 +153,7 @@ vector<char> MarcRestClient::performGet()
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) // OK or redirect
-        throw MailApiException(string("non-success return code! Received data: ") + result.data(), ret);
+        throw MailApiException("non-success return code!", ret);
 
     restClient->reset();
 

@@ -2,26 +2,15 @@
 
 #include "marc_api_cloudfile.h"
 
-LockHolder<MarcFileNode> MruData::getOrCreateFile(std::string path) {
-    std::lock_guard<std::mutex> lock(cacheLock);
-    auto file = getOrCreateFileNode(path);
-
-    return LockHolder<MarcFileNode>(file);
-}
-
-LockHolder<MarcDirNode> MruData::getOrCreateDir(std::string path) {
-    std::lock_guard<std::mutex> lock(cacheLock);
-    auto dir = getOrCreateDirNode(path);
-
-    dir->getMutex().lock();
-    return LockHolder<MarcDirNode>(dir);
-}
-
 void MruData::putCacheStat(std::string path, const CloudFile *cf) {
     std::lock_guard<std::mutex> lock(cacheLock);
+
+    auto it = cache.find(path);
+    if (it != cache.end()) // altering cache where it's already present, skip
+        return;
+
     if (!cf) {
         // mark non-existing
-        purgeNode(path);
         cache[path] = std::make_unique<MarcDummyNode>();
         return;
     }
@@ -29,17 +18,18 @@ void MruData::putCacheStat(std::string path, const CloudFile *cf) {
     MarcNode *node;
     switch (cf->getType()) {
         case CloudFile::File: {
-            auto file = getOrCreateFileNode(path);
+            auto file = new MarcFileNode;
             file->setSize(cf->getSize());
             node = file;
             break;
         }
         case CloudFile::Directory: {
-            node = getOrCreateDirNode(path);
+            node = new MarcDirNode;
             break;
         }
     }
     node->setMtime(static_cast<time_t>(cf->getMtime()));
+    cache[path] = std::unique_ptr<MarcNode>(node);
 }
 
 void MruData::purgeCache(std::string path) {

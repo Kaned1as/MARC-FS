@@ -16,7 +16,7 @@
 
 #define API_CALL_TRY_FINISH \
     } catch (MailApiException &exc) { \
-        if (exc.getResponseCode() == 500) \
+        if (exc.getResponseCode() >= 500) \
             return -EAGAIN; \
         return -EIO;\
     }
@@ -153,11 +153,12 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     filler(dirhandle, "..", nullptr, 0);
 
     string pathStr(path); // e.g. /directory or /
+    bool trailingSlash = pathStr[pathStr.size() - 1] == '/';
 
     API_CALL_TRY_BEGIN
     auto contents = client->ls(pathStr);
     for (const CloudFile &cf : contents) {
-        string fullPath = pathStr + "/" + cf.getName();
+        string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
         struct stat stbuf = {};
         fsMetadata.putCacheStat(fullPath, &cf);
         fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
@@ -295,8 +296,10 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto file = fsMetadata.getNode<MarcFileNode>(path);
-    file->getCachedContent().clear(); // forget contents of a node
-    file->getCachedContent().shrink_to_fit();
+    auto &vec = file->getCachedContent();
+    file->setSize(vec.size()); // set cached size to last content size before clearing
+    vec.clear(); // forget contents of a node
+    vec.shrink_to_fit();
     MARCFS_MEMTRIM
 
     return 0;
@@ -306,6 +309,7 @@ int mkdirCallback(const char *path, mode_t /*mode*/)
 {
     API_CALL_TRY_BEGIN
     client->mkdir(path);
+    fsMetadata.create<MarcDirNode>(path);
     API_CALL_TRY_FINISH
     return 0;
 }
@@ -359,6 +363,7 @@ int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
     API_CALL_TRY_BEGIN
     vector<char> tmp; // lvalue
     client->upload(path, tmp);
+    fsMetadata.create<MarcFileNode>(path);
     API_CALL_TRY_FINISH
 
     return 0;
