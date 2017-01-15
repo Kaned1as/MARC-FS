@@ -6,14 +6,16 @@
 #include "marc_dir_node.h"
 #include "marc_dummy_node.h"
 
+using namespace std;
+
 template<typename T>
-LockHolder<T> MruData::getNode(std::string path) {
-    std::lock_guard<std::mutex> lock(cacheLock);
+LockHolder<T> MruData::getNode(string path) {
+    lock_guard<mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
         T *node = dynamic_cast<T*>(it->second.get());
         if (!node)
-            throw std::invalid_argument("Expected another type in node " + path);
+            throw invalid_argument("Expected another type in node " + path);
 
         return LockHolder<T>(node);
     }
@@ -22,28 +24,28 @@ LockHolder<T> MruData::getNode(std::string path) {
 }
 
 // instantiations
-template LockHolder<MarcNode> MruData::getNode(std::string path);
-template LockHolder<MarcFileNode> MruData::getNode(std::string path);
-template LockHolder<MarcDirNode> MruData::getNode(std::string path);
-template LockHolder<MarcDummyNode> MruData::getNode(std::string path);
+template LockHolder<MarcNode> MruData::getNode(string path);
+template LockHolder<MarcFileNode> MruData::getNode(string path);
+template LockHolder<MarcDirNode> MruData::getNode(string path);
+template LockHolder<MarcDummyNode> MruData::getNode(string path);
 
 template<typename T>
-void MruData::create(std::string path) {
-    std::lock_guard<std::mutex> lock(cacheLock);
+void MruData::create(string path) {
+    lock_guard<mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
-        throw std::invalid_argument("Cache already contains node at path " + path);
+        throw invalid_argument("Cache already contains node at path " + path);
 
-    cache[path] = std::make_unique<T>();
+    cache[path] = make_unique<T>();
 }
 
 // instantiations
-template void MruData::create<MarcFileNode>(std::string path);
-template void MruData::create<MarcDirNode>(std::string path);
-template void MruData::create<MarcDummyNode>(std::string path);
+template void MruData::create<MarcFileNode>(string path);
+template void MruData::create<MarcDirNode>(string path);
+template void MruData::create<MarcDummyNode>(string path);
 
-void MruData::putCacheStat(std::string path, const CloudFile *cf) {
-    std::lock_guard<std::mutex> lock(cacheLock);
+void MruData::putCacheStat(string path, const CloudFile *cf) {
+    lock_guard<mutex> lock(cacheLock);
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
@@ -51,7 +53,7 @@ void MruData::putCacheStat(std::string path, const CloudFile *cf) {
 
     if (!cf) {
         // mark non-existing
-        cache[path] = std::make_unique<MarcDummyNode>();
+        cache[path] = make_unique<MarcDummyNode>();
         return;
     }
 
@@ -69,11 +71,11 @@ void MruData::putCacheStat(std::string path, const CloudFile *cf) {
         }
     }
     node->setMtime(static_cast<time_t>(cf->getMtime()));
-    cache[path] = std::unique_ptr<MarcNode>(node);
+    cache[path] = unique_ptr<MarcNode>(node);
 }
 
-void MruData::purgeCache(std::string path) {
-    std::lock_guard<std::mutex> lock(cacheLock);
+void MruData::purgeCache(string path) {
+    lock_guard<mutex> lock(cacheLock);
     auto it = cache.find(path);
 
     // node doesn't exist
@@ -86,4 +88,46 @@ void MruData::purgeCache(std::string path) {
     it->second->getMutex().lock(); // obtain lock, wait if necessary
     it->second->getMutex().unlock();
     cache.erase(it);
+}
+
+bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
+{
+    // we store cache in map, this means we can find dir contents
+    // by finding itself and promoting iterator further
+    lock_guard<mutex> lock(cacheLock);
+    auto it = cache.find(path);
+    if (it == cache.end())
+        return false; // not found in cache
+
+    // make sure we did readdir on that path previously
+    const auto dir = dynamic_cast<MarcDirNode*>(it->second.get());
+    if (!dir)
+        throw invalid_argument("Node at requested path is not a dir!");
+
+    if (!dir->isCached())
+        return false;
+
+    // move iterator further as first step, we don't need
+    // the directory itself in listing
+    for (++it; it != cache.end(); ++it) {
+        if (it->first.find(path) != 0) // we are moved to other entries, break
+            break;
+
+        if (!it->second->exists())
+            continue; // skip negative nodes
+
+        // root dir is special
+        // "/folder" -> "folder", "/folder/f2" -> "f2"
+        auto outerSize = path == "/" ? path.size() : path.size() + 1;
+
+        string innerPath = it->first.substr(outerSize);
+        if (innerPath.find('/') != string::npos)
+            continue; // skip nested directories
+
+        struct stat stats = {};
+        it->second->fillStats(&stats);
+        filler(dirhandle, innerPath.data(), &stats, 0);
+    }
+
+    return true;
 }

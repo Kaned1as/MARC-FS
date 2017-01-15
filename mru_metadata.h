@@ -96,6 +96,16 @@ public:
      * @param path path to clear cache for
      */
     void purgeCache(std::string path);
+
+    /**
+     * @brief tryFillDir - tries to fill FUSE directory handle with cached content
+     * @param path path to dir to fill contents for
+     * @param dirhandle - passed from readdir
+     * @param filler - passed from readdir
+     * @return true if directory was found in cache, false otherwise
+     * @see fuse_hooks.cpp
+     */
+    bool tryFillDir(std::string path, void *dirhandle, fuse_fill_dir_t filler);
 private:
 
     /**

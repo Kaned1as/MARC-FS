@@ -18,7 +18,7 @@
 
 #define API_CALL_TRY_FINISH \
     } catch (MailApiException &exc) { \
-        cerr << "error in " << __FUNCTION__ << ": " << exc.what() << endl;\
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl; \
         if (exc.getResponseCode() >= 500) \
             return -EAGAIN; \
         return -EIO;\
@@ -26,13 +26,20 @@
 
 using namespace std;
 
+// explicit instantiation declarations
+extern template LockHolder<MarcNode> MruData::getNode(string);
+extern template LockHolder<MarcFileNode> MruData::getNode(string);
+extern template LockHolder<MarcDirNode> MruData::getNode(string);
+extern template void MruData::create<MarcDirNode>(string);
+extern template void MruData::create<MarcFileNode>(string);
+
 
 void * initCallback(fuse_conn_info *conn)
 {
     conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
 
     // confusing, right?
-    // one would think we support async reads because we invoke downloadAsync from API
+    // one would think we support async reads because we can invoke downloadAsync from API
     // but here's the thing - these download-related reads come *sequentially*,
     // with each next offset being equal to last + total.
     // FUSE_CAP_ASYNC_READ value means that multiple reads with different offsets
@@ -46,19 +53,20 @@ int getattrCallback(const char *path, struct stat *stbuf)
 {
     // retrieve path to containing dir
     string pathStr(path); // e.g. /home/1517.svg
-    if (pathStr == "/") { // special handling for root
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        return 0;
-    }
 
     // try to retrieve it from cache
-    auto node = fsMetadata.getNode<MarcNode>(path);
+    auto node = fsMetadata.getNode<MarcNode>(pathStr);
     if (node) { // have this file in cache get stat
         if (!node->exists())
             return -ENOENT;
 
         node->fillStats(stbuf);
+        return 0;
+    }
+
+    if (pathStr == "/") { // special handling for root
+        fsMetadata.create<MarcDirNode>(pathStr);
+        fsMetadata.getNode<MarcDirNode>(pathStr)->fillStats(stbuf);
         return 0;
     }
 
@@ -156,10 +164,13 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     filler(dirhandle, "..", nullptr, 0);
 
     string pathStr(path); // e.g. /directory or /
-    bool trailingSlash = pathStr[pathStr.size() - 1] == '/';
+
+    if (fsMetadata.tryFillDir(pathStr, dirhandle, filler))
+        return 0;
 
     API_CALL_TRY_BEGIN
     auto contents = client->ls(pathStr);
+    bool trailingSlash = pathStr[pathStr.size() - 1] == '/';
     for (const CloudFile &cf : contents) {
         string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
         struct stat stbuf = {};
@@ -167,6 +178,9 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
+    // confirm readdir cache
+    auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
+    node->setCached(true);
     API_CALL_TRY_FINISH
 
     return 0;
