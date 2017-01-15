@@ -1,5 +1,4 @@
 #include "curl_header.h"
-#include "curl_ios.h"
 
 #include "marc_api.h"
 
@@ -208,10 +207,6 @@ bool MarcRestClient::login(const Account &acc)
     return true;
 }
 
-/**
- * @brief API::authenticate - retrieves initial authentication cookies
- * @return true if cookies were successfully set, false otherwise
- */
 void MarcRestClient::authenticate()
 {
     // Login={0}&Domain={1}&Password={2}
@@ -229,10 +224,6 @@ void MarcRestClient::authenticate()
         throw MailApiException("Failed to authenticate in mail.ru domain!");
 }
 
-/**
- * @brief API::obtainCloudCookie - retrieves basic cloud cookie that is needed for API exchange
- * @return true if cookie was successfully obtained, false otherwise
- */
 void MarcRestClient::obtainCloudCookie()
 {
     curl_form form;
@@ -248,10 +239,6 @@ void MarcRestClient::obtainCloudCookie()
         throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
 }
 
-/**
- * @brief API::obtainAuthToken - retrieve auth token. This is the first step in Mail.ru cloud API exchange
- * @return true if token was obtained, false otherwise
- */
 void MarcRestClient::obtainAuthToken()
 {
     curl_header header;

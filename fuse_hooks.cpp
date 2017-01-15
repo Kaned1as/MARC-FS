@@ -1,8 +1,7 @@
 #include "fuse_hooks.h"
 
 #include <malloc.h>
-#include <cstring>
-#include <thread>
+//#include <thread>
 
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
@@ -19,6 +18,7 @@
 
 #define API_CALL_TRY_FINISH \
     } catch (MailApiException &exc) { \
+        cerr << "error in " << __FUNCTION__ << ": " << exc.what() << endl;\
         if (exc.getResponseCode() >= 500) \
             return -EAGAIN; \
         return -EIO;\

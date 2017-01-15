@@ -5,18 +5,33 @@
 #include "marc_api_shard.h"
 #include "marc_api_cloudfile.h"
 
-#include "curl_easy.h"
 #include "curl_cookie.h"
 
 #include "blocking_queue.h"
 #include "utils.h"
 
+/**
+ * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru CLoud API.
+ *
+ * This class is used in an object pool to perform various lookups/calls to Mail.ru cloud.
+ * It operates via cURL calls to specified endpoints. There is no public Cloud docs exposed
+ * so all calls here are reverse-engineered from browser-to-cloud interaction.
+ *
+ * cURL connects via HTTPS protocol, so uses libcrypto PKIX. This means that there are
+ * engine initialization, handshake, keys and other memory-pressing entities created
+ * as a result of exchange. Valgrind may report false-positives for calls from here
+ * that appear because libcrypto initializes its engine partially on garbage heap data.
+ *
+ * @see mru_metadata.h
+ * @see fuse_hooks.cpp
+ */
 class MarcRestClient
 {
 public:
     using Params = std::map<std::string, std::string>;
 
     MarcRestClient();
+
     /**
      * @brief MarcRestClient - for copying already authenticated rest client.
      *                         copies account and cookies from the argument
@@ -138,8 +153,30 @@ private:
     void move(std::string whatToMove, std::string whereToMove);
 
     // auth
+    /**
+     * @brief API::authenticate - retrieves initial authentication cookies
+     *
+     * This actually uses provided auth details to create am authenticated session.
+     * The cookies gained are stored and later reused in all operations.
+     *
+     * @throws MailApiException in case of auth failure
+     */
     void authenticate();
+
+    /**
+     * @brief API::obtainCloudCookie - retrieves basic cloud cookie that is needed for API exchange
+     * @throws MailApiException in case of failure
+     */
     void obtainCloudCookie();
+
+    /**
+     * @brief API::obtainAuthToken - retrieve auth token.
+     *
+     * This is the first step in Mail.ru Cloud REST API exchange.
+     * Then token is unique to exchange session, so it is stored and can be reused.
+     *
+     * @throws MailApiException in case of failure
+     */
     void obtainAuthToken();
 
     // cURL helpers
