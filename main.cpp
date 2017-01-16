@@ -73,7 +73,10 @@ int main(int argc, char *argv[])
     // parse options
     fuse_args args = FUSE_ARGS_INIT(argc, argv);
     marcfs_config conf = {};
-    fuse_opt_parse(&args, &conf, marcfs_opts, marcfs_opt_proc);
+    int res = fuse_opt_parse(&args, &conf, marcfs_opts, marcfs_opt_proc);
+    if (res == -1) {
+        return 2;
+    }
 
     // initialize auth and globals
     Account acc;
