@@ -1,4 +1,5 @@
 #include <cstddef> // offsetof macro
+#include <string.h>
 #include <unistd.h>
 
 #include "fuse_hooks.h"
@@ -57,6 +58,31 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
     return 1;
 }
 
+void hide_sensitive_data(char *param, size_t rest) {
+    char *data = strchr(param, '=');
+    size_t j, len;
+    if (data && (len = strlen(++data) - rest)) {
+        for (j = 0; j < len; ++j) {
+            *(data++) = '*';
+        }
+    }
+}
+
+void hide_sensitive(int argc, char *argv[]) {
+    int i;
+    char *user, *pasw;
+    for (i = 1; i < argc; ++i) {
+        user = strstr(argv[i], "username=");
+        pasw = strstr(argv[i], "password=");
+        if (user) {
+            hide_sensitive_data(user, (pasw && pasw > user) ? (strlen(pasw) + 1) : 0);
+        }
+        if (pasw) {
+            hide_sensitive_data(pasw, (user && user > pasw) ? (strlen(user) + 1) : 0);
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (getuid() == 0 || geteuid() == 0) {
@@ -77,6 +103,8 @@ int main(int argc, char *argv[])
     if (res == -1) {
         return 2;
     }
+
+    hide_sensitive(argc, argv);
 
     // initialize auth and globals
     Account acc;
