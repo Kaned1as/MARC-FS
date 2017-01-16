@@ -60,9 +60,8 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - Caching could be better actually
-  - Crashes on first non-success return from REST API
   - No tests
+  - On RHEL-based distros (CentOS/Fedora) you may need `NSS_STRICT_NOFORK=DISABLED` environment variable (see [this](https://gitlab.com/Kanedias/MARC-FS/issues/6) and [this](https://bugzilla.redhat.com/show_bug.cgi?id=1317691))
 2. Principal (Mail.ru Cloud API limitations)
   - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
   - No extended attr/chmod support, all files on storage are owned by you
