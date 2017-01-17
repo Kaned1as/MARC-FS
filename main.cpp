@@ -58,7 +58,7 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
     return 1;
 }
 
-void hide_sensitive_data(char *param, size_t rest) {
+static void hide_sensitive_data(char *param, size_t rest) {
     char *data = strchr(param, '=');
     size_t j, len;
     if (data && (len = strlen(++data) - rest)) {
@@ -68,7 +68,7 @@ void hide_sensitive_data(char *param, size_t rest) {
     }
 }
 
-void hide_sensitive(int argc, char *argv[]) {
+static void hide_sensitive(int argc, char *argv[]) {
     int i;
     char *user, *pasw;
     for (i = 1; i < argc; ++i) {
