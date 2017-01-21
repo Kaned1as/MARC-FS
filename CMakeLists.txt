@@ -5,7 +5,7 @@ aux_source_directory(. SRC_LIST)
 # C++ standard
 set(CMAKE_CXX_STANDARD 14)
 MESSAGE(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
-MESSAGE( STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
+MESSAGE(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
 set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64")
@@ -27,6 +27,10 @@ endif()
 ADD_SUBDIRECTORY(contrib/curlcpp)
 INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
 
+# Googletest lib
+ADD_SUBDIRECTORY(contrib/googletest/googletest)
+INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
+
 # JSONCPP
 find_package(JSONCPP REQUIRED)
 if (NOT JSONCPP_FOUND)
@@ -36,5 +40,12 @@ else()
     include_directories(${JSONCPP_INCLUDE_DIR})
 endif()
 
-add_executable("marcfs" ${SRC_LIST})
-target_link_libraries("marcfs" curlcpp jsoncpp fuse pthread)
+# first, run tests
+add_executable(apitest tests/apitest.cpp)
+add_library(marcfs_for_testing STATIC ${SRC_LIST})
+target_link_libraries(apitest gtest_main marcfs_for_testing curlcpp jsoncpp)
+add_test(NAME rest_api_test COMMAND apitest)
+
+# final binary
+add_executable(marcfs ${SRC_LIST})
+target_link_libraries(marcfs curlcpp jsoncpp fuse pthread)

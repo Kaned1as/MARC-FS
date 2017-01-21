@@ -2,3 +2,6 @@
 	path = contrib/curlcpp
     url = https://github.com/JosephP91/curlcpp.git
     ignore = dirty
+[submodule "contrib/googletest"]
+	path = contrib/googletest
+	url = https://github.com/google/googletest

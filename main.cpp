@@ -1,3 +1,23 @@
+/*****************************************************************************
+ *
+ * Copyright (c) 2017, Oleg `Kanedias` Chernovskiy
+ *
+ * This file is part of MARC-FS.
+ *
+ * MARC-FS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MARC-FS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include <cstddef> // offsetof macro
 #include <string.h>
 #include <unistd.h>
@@ -6,7 +26,7 @@
 #include "account.h"
 #include "utils.h"
 
-#define MRUFS_OPT(t, p, v) { t, offsetof(marcfs_config, p), v }
+#define MARC_FS_OPT(t, p, v) { t, offsetof(marcfs_config, p), v }
 #define MARC_FS_VERSION "0.1"
 
 using namespace std;
@@ -24,8 +44,8 @@ enum {
 };
 
 static struct fuse_opt marcfs_opts[] = {
-     MRUFS_OPT("username=%s",   username, 0),
-     MRUFS_OPT("password=%s",   password, 0),
+     MARC_FS_OPT("username=%s",   username, 0),
+     MARC_FS_OPT("password=%s",   password, 0),
 
      FUSE_OPT_KEY("-V",         KEY_VERSION),
      FUSE_OPT_KEY("--version",  KEY_VERSION),
@@ -58,22 +78,32 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
     return 1;
 }
 
+/**
+ * @brief hide_sensitive_data - the part that actually changes all characters
+ *        after equal sign into asterisks
+ * @param param - parameter, like username=alice
+ * @param rest - length of parameter
+ */
 static void hide_sensitive_data(char *param, size_t rest) {
     char *data = strchr(param, '=');
-    size_t j, len;
+    size_t len;
     if (data && (len = strlen(++data) - rest)) {
-        for (j = 0; j < len; ++j) {
+        for (size_t j = 0; j < len; ++j) {
             *(data++) = '*';
         }
     }
 }
 
+/**
+ * @brief hide_sensitive - routine to check for credential mapping in arguments
+ *        and change any sensitive data found into asterisks.
+ * @param argc - argument count, pass directly from main
+ * @param argv - argument array, pass directly from main
+ */
 static void hide_sensitive(int argc, char *argv[]) {
-    int i;
-    char *user, *pasw;
-    for (i = 1; i < argc; ++i) {
-        user = strstr(argv[i], "username=");
-        pasw = strstr(argv[i], "password=");
+    for (int i = 1; i < argc; ++i) {
+        char *user = strstr(argv[i], "username=");
+        char *pasw = strstr(argv[i], "password=");
         if (user) {
             hide_sensitive_data(user, (pasw && pasw > user) ? (strlen(pasw) + 1) : 0);
         }
