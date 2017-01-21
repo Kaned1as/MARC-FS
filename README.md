@@ -60,7 +60,10 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - No tests
+  - very big memory footprint due to 
+      - reading files into memory when reading/writing (not sure how this can be circumvented, see API limitation)
+      - SSL engine sessions - tend to become bigger with time (WIP)
+      - heap fragmentation (WIP)
   - On RHEL-based distros (CentOS/Fedora) you may need `NSS_STRICT_NOFORK=DISABLED` environment variable (see [this](https://gitlab.com/Kanedias/MARC-FS/issues/6) and [this](https://bugzilla.redhat.com/show_bug.cgi?id=1317691))
 2. Principal (Mail.ru Cloud API limitations)
   - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
