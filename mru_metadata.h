@@ -21,6 +21,8 @@
 #ifndef MRU_METADATA_H
 #define MRU_METADATA_H
 
+#include <fuse.h>
+
 #include <map>
 #include <vector>
 

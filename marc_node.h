@@ -21,7 +21,6 @@
 #ifndef MARC_NODE_H
 #define MARC_NODE_H
 
-#include <fuse.h>
 #include <mutex>
 
 /**

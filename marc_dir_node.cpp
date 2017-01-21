@@ -20,6 +20,8 @@
 
 #include "marc_dir_node.h"
 
+#include <fuse.h>
+
 MarcDirNode::MarcDirNode()
 {
 
