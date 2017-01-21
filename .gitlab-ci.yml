@@ -1,16 +1,36 @@
-before_script:
-  - uname -a
-
-smoke-ubuntu: # smoke build - just test that it compiles
+test on ubuntu:
   image: ubuntu
-  script:
+  before_script: &common_prepare_debian
     - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
     - git submodule update --init --recursive # update curlcpp and googletest
+  script: &common_script
     - mkdir build
     - cd build
     - cmake ..
     - "make -j$(nproc)"
-  artifacts:
+    - ./apitest
+  artifacts: &common_artifacts
     paths:
       - build/marcfs
+
+test on mint:
+  image: vcatechnology/linux-mint
+  before_script: *common_prepare_debian
+  script: *common_script
+  artifacts: *common_artifacts
   
+test on fedora:
+  image: fedora
+  before_script: 
+    - yum -y install git-all cmake gcc-c++ fuse-devel libcurl-devel jsoncpp-devel
+    - git submodule update --init --recursive # update curlcpp and googletest
+  script: *common_script
+  artifacts: *common_artifacts
+  
+test on arch:
+  image: pritunl/archlinux
+  before_script:
+    - pacman -S --noconfirm git make cmake gcc fuse2 libcurl-gnutls jsoncpp
+    - git submodule update --init --recursive # update curlcpp and googletest
+  script: *common_script
+  artifacts: *common_artifacts
