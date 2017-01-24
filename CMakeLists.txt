@@ -48,4 +48,8 @@ add_test(NAME rest_api_test COMMAND apitest)
 
 # final binary
 add_executable(marcfs ${SRC_LIST})
-target_link_libraries(marcfs curlcpp jsoncpp fuse pthread)
+target_link_libraries(marcfs
+    curlcpp
+    ${JSONCPP_LIBRARIES}
+    ${FUSE_LIBRARIES}
+)
