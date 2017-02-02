@@ -171,7 +171,6 @@ int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
 
 int openCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto api = fsMetadata.clientPool.acquire();
     // file shoupd already be present as FUSE does /getattr call prior to open
     auto file = fsMetadata.getNode<MarcFileNode>(path);
 

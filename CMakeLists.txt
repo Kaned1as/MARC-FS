@@ -40,6 +40,14 @@ else()
     include_directories(${JSONCPP_INCLUDE_DIR})
 endif()
 
+# JEMALLOC - optional
+find_package(JEMALLOC)
+if(JEMALLOC_FOUND)
+  include_directories(${JEMALLOC_INCLUDE_DIRS})
+else()
+    message(WARNING "jemalloc not found but highly recommended")
+endif()
+
 # first, run tests
 add_executable(apitest tests/apitest.cpp)
 add_library(marcfs_for_testing STATIC ${SRC_LIST})
@@ -52,4 +60,5 @@ target_link_libraries(marcfs
     curlcpp
     ${JSONCPP_LIBRARIES}
     ${FUSE_LIBRARIES}
+    ${JEMALLOC_LIBRARIES}
 )
