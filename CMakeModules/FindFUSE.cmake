@@ -27,7 +27,7 @@ FIND_LIBRARY(FUSE_LIBRARIES
         PATHS /lib64 /lib /usr/lib64 /usr/lib /usr/local/lib64 /usr/local/lib
 )
 
-include ("FindPackageHandleStandardArgs")
+include (FindPackageHandleStandardArgs)
 find_package_handle_standard_args ("FUSE" DEFAULT_MSG
     FUSE_INCLUDE_DIR FUSE_LIBRARIES)
 

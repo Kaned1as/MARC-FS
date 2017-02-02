@@ -179,13 +179,12 @@ vector<char> MarcRestClient::performGet()
         throw MailApiException(string("Non-success return code! Body:") + body, ret);
     }
 
-    restClient->reset();
-
     return result;
 }
 
 void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
 {
+    ScopeGuard resetter = [&]() { restClient->reset(); };
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -212,7 +211,6 @@ void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
         throw MailApiException("non-success return code!", ret);
 
     p.markEnd();
-    restClient->reset();
 }
 
 bool MarcRestClient::login(const Account &acc)
@@ -386,11 +384,11 @@ SpaceInfo MarcRestClient::df()
     Reader reader;
 
     if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Cannot parse JSON ls response!");
+        throw MailApiException("Cannot parse JSON df response!");
 
     // if `total` is there, `used` will definitely be...
     if (response["body"] == Value() || response["body"]["total"] == Value())
-        throw MailApiException("Non-well formed JSON ls response!");
+        throw MailApiException("Non-well formed JSON df response!");
 
     Value &total = response["body"]["total"];
     Value &used = response["body"]["used"];

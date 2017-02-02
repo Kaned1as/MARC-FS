@@ -20,17 +20,19 @@
 
 #include "fuse_hooks.h"
 
-#include <malloc.h>
-//#include <thread>
-
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
 
-/**
- * force OS to reclaim memory above 64KiB from us
- * @note Bear in mind that trim doesn't free data int the middle of the heap!
- */
-#define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024);
+#ifndef __APPLE__ // OS X does not have glibc's malloc helpers
+    #include <malloc.h>
+    /**
+     * force OS to reclaim memory above 64KiB from us
+     * @note Bear in mind that trim doesn't free data int the middle of the heap!
+     */
+    #define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024);
+#else
+    #define MARCFS_MEMTRIM
+#endif
 
 #define API_CALL_TRY_BEGIN  \
     try { \
@@ -56,6 +58,7 @@ extern template void MruData::create<MarcFileNode>(string);
 
 void * initCallback(fuse_conn_info *conn)
 {
+#ifndef __APPLE__ // APPLE doesn't yet have this in osxfuse
     conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
 
     // confusing, right?
@@ -66,6 +69,7 @@ void * initCallback(fuse_conn_info *conn)
     // will come in one time. We surely can't support this.
     conn->want &= static_cast<unsigned>(~FUSE_CAP_ASYNC_READ);
     conn->async_read = 0;
+#endif
     return nullptr;
 }
 
@@ -167,7 +171,6 @@ int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
 
 int openCallback(const char *path, struct fuse_file_info */*fi*/)
 {
-    auto api = fsMetadata.clientPool.acquire();
     // file shoupd already be present as FUSE does /getattr call prior to open
     auto file = fsMetadata.getNode<MarcFileNode>(path);
 

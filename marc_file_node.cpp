@@ -18,7 +18,10 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <fuse.h>
+
 #include "marc_file_node.h"
+
 
 MarcFileNode::MarcFileNode()
 {

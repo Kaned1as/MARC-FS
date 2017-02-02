@@ -21,8 +21,6 @@
 #ifndef FUSE_HOOKS_H
 #define FUSE_HOOKS_H
 
-#define FUSE_USE_VERSION 26
-
 #include "mru_metadata.h"
 
 extern MruData fsMetadata;

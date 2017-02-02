@@ -1,0 +1,18 @@
+os: osx
+
+osx_image: xcode8.2
+
+language: cpp
+
+before_install:
+  - brew update
+  - brew install llvm
+  - brew cask install osxfuse
+  - brew install curl
+  - brew install jsoncpp
+
+script:
+  - mkdir build && cd build
+  - cmake ..
+  - make
+  - ./apitest

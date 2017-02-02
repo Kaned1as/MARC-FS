@@ -18,8 +18,9 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "marc_node.h"
+#include <fuse.h>
 
+#include "marc_node.h"
 #include "utils.h"
 
 MarcNode::MarcNode()
@@ -50,7 +51,11 @@ void MarcNode::fillStats(struct stat *stbuf) const
     auto ctx = fuse_get_context();
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
     stbuf->st_gid = ctx->gid;
+#ifndef __APPLE__
     stbuf->st_mtim.tv_sec = mtime;
+#else
+    stbuf->st_mtimespec.tv_sec = mtime;
+#endif
 }
 
 std::mutex& MarcNode::getMutex()

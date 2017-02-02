@@ -8,7 +8,7 @@ MESSAGE(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
 MESSAGE(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
-set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64")
+set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FUSE_REQUIRED_FLAGS}")
 
 # modules
@@ -40,6 +40,14 @@ else()
     include_directories(${JSONCPP_INCLUDE_DIR})
 endif()
 
+# JEMALLOC - optional
+find_package(JEMALLOC)
+if(JEMALLOC_FOUND)
+  include_directories(${JEMALLOC_INCLUDE_DIRS})
+else()
+    message(WARNING "jemalloc not found but highly recommended")
+endif()
+
 # first, run tests
 add_executable(apitest tests/apitest.cpp)
 add_library(marcfs_for_testing STATIC ${SRC_LIST})
@@ -48,4 +56,9 @@ add_test(NAME rest_api_test COMMAND apitest)
 
 # final binary
 add_executable(marcfs ${SRC_LIST})
-target_link_libraries(marcfs curlcpp jsoncpp fuse pthread)
+target_link_libraries(marcfs
+    curlcpp
+    ${JSONCPP_LIBRARIES}
+    ${FUSE_LIBRARIES}
+    ${JEMALLOC_LIBRARIES}
+)
