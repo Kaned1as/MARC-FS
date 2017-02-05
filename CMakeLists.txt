@@ -14,6 +14,22 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FUSE_REQUIRED_FLAGS}")
 # modules
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 
+#                            #
+# internal libs and packages #
+#                            #
+
+# Curl C++ bindings
+ADD_SUBDIRECTORY(contrib/curlcpp)
+INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
+
+# Googletest bindings
+ADD_SUBDIRECTORY(contrib/googletest/googletest)
+INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
+
+#                            #
+# external libs and packages #
+#                            #
+
 # FUSE
 find_package(FUSE REQUIRED)
 if(NOT FUSE_FOUND)
@@ -22,14 +38,6 @@ if(NOT FUSE_FOUND)
 else()
     include_directories(${FUSE_INCLUDE_DIR})
 endif()
-
-# Curl C++ bindings
-ADD_SUBDIRECTORY(contrib/curlcpp)
-INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
-
-# Googletest lib
-ADD_SUBDIRECTORY(contrib/googletest/googletest)
-INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
 
 # JSONCPP
 find_package(JSONCPP REQUIRED)
@@ -60,5 +68,9 @@ target_link_libraries(marcfs
     curlcpp
     ${JSONCPP_LIBRARIES}
     ${FUSE_LIBRARIES}
-    ${JEMALLOC_LIBRARIES}
 )
+
+# optional libs
+if(JEMALLOC_FOUND)
+    target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
+endif()
