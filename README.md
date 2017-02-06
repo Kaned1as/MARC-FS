@@ -27,21 +27,27 @@ MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. 
     $ cd build && cmake ..
     $ make
     $ # here goes the step where you actually go and register on mail.ru website to obtain cloud storage and auth info
-    $ ./marcfs /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
+    $ ./marcfs /path/to/mount/folder -o username=your.email@mail.ru,password=your.password
 
 If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncFS filesystem to achieve this:
 
-    $ ./marcfs /path/to/empty/folder -o username=your.email@mail.ru,password=your.password
-    $ mkdir /path/to/empty/folder/encrypted # needed only once when you init your EncFS
-    $ encfs --no-default-flags /path/to/empty/folder/encrypted /path/to/decrypted/dir
+    $ ./marcfs /path/to/mount/folder -o username=your.email@mail.ru,password=your.password
+    $ mkdir /path/to/mount/folder/encrypted # needed only once when you init your EncFS
+    $ encfs --no-default-flags /path/to/mount/folder/encrypted /path/to/decrypted/dir
     $ cp whatever /path/to/decrypted/dir
-    $ # at this point encrypted data will appear in Mail.ru storage
+    $ # at this point encrypted data will appear in Cloud Mail.ru storage
+
+If you want to use rsync to synchronize local and remote sides, use `--sizes-only` option. 
+Rsync compares mtime and size of file by default, but Mail.ru Cloud saves only seconds in mtime, 
+which causes false-positives and reuploads of identical files:
+
+    $ rsync -av --delete --size-only /path/to/local/folder/ ~/path/to/mount/folder
 
 To unmount previously mounted share, make sure no one uses it and execute:
 
     $ # if you mounted encfs previously, first unmount it
-    $ # fusermount -u /path/to/empty/folder/encrypted
-    $ fusermount -u /path/to/empty/folder
+    $ # fusermount -u /path/to/mount/folder/encrypted
+    $ fusermount -u /path/to/mount/folder
 
 API references
 --------------
@@ -73,7 +79,8 @@ Bugs & Known issues
 
 Contributions
 ------------
-You may create merge request or bug/enhancement issue right here on GitLab, or send foramtted patch via e-mail. Audits from code style and security standpoint are also much appreciated.
+You may create merge request or bug/enhancement issue right here on GitLab, or send formatted patch via e-mail. For details see CONTRIBUTING.md file in this repo. 
+Audits from code style and security standpoint are also much appreciated.
 
 License
 -------
