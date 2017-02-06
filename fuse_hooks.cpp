@@ -23,17 +23,6 @@
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
 
-#ifndef __APPLE__ // OS X does not have glibc's malloc helpers
-    #include <malloc.h>
-    /**
-     * force OS to reclaim memory above 64KiB from us
-     * @note Bear in mind that trim doesn't free data int the middle of the heap!
-     */
-    #define MARCFS_MEMTRIM          malloc_trim(64 * 1024 * 1024);
-#else
-    #define MARCFS_MEMTRIM
-#endif
-
 #define API_CALL_TRY_BEGIN  \
     try { \
         auto client = fsMetadata.clientPool.acquire();
@@ -340,7 +329,6 @@ int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
     file->setSize(vec.size()); // set cached size to last content size before clearing
     vec.clear(); // forget contents of a node
     vec.shrink_to_fit();
-    MARCFS_MEMTRIM
 
     return 0;
 }
