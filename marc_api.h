@@ -30,6 +30,10 @@
 #include "blocking_queue.h"
 #include "utils.h"
 
+#define MARCFS_MAX_FILE_SIZE (1L << 31) // 2 GB
+//#define MARCFS_MAX_FILE_SIZE (1L << 25) // 32 MiB - for tests
+#define MARCFS_SUFFIX ".marcfs-part-"
+
 /**
  * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru CLoud API.
  *
@@ -70,7 +74,7 @@ public:
      * @brief upload uploads bytes in @param body to remote endpoint
      * @param remotePath remote path to folder where uploaded file should be (e.g. /newfolder)
      */
-    void upload(std::string remotePath, std::vector<char> &body);
+    void upload(std::string remotePath, std::vector<char> &body, size_t start = 0, size_t count = SIZE_MAX);
 
     /**
      * @brief uploadAsync - async version of @fn upload call
@@ -99,7 +103,11 @@ public:
     /**
      * @brief download download file pointed by remotePath to local path
      * @param remotePath remote path on cloud server
-     * @return data downloaded from server
+     * @param target target of download operation - resulting bytes are appended there
+     */
+    void download(std::string remotePath, std::vector<char> &target);
+    /**
+     * @brief download - returning version of this func
      */
     std::vector<char> download(std::string remotePath);
 
@@ -202,7 +210,7 @@ private:
     // cURL helpers
     std::string paramString(Params const &params);
     std::string performPost();
-    std::vector<char> performGet();
+    void performGet(std::vector<char> &target);
     void performGetAsync(BlockingQueue<char> &p);
     void performPostAsync(BlockingQueue<char> &p);
 

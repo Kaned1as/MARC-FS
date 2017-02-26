@@ -54,14 +54,6 @@ static const string SCLD_RENAMEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/rename";
 static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
-static const long MAX_FILE_SIZE = 2L * 1024L * 1024L * 1024L;
-
-struct ReadData {
-    const vector<char> * const content;
-    size_t offset;
-};
-
-
 MarcRestClient::MarcRestClient()
     : restClient(make_unique<curl::curl_easy>()),
       cookieStore(*restClient)
@@ -139,10 +131,8 @@ string MarcRestClient::performPost()
     return stream.str();
 }
 
-vector<char> MarcRestClient::performGet()
+void MarcRestClient::performGet(std::vector<char> &target)
 {
-    vector<char> result;
-
     curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
@@ -153,7 +143,7 @@ vector<char> MarcRestClient::performGet()
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
-    restClient->add<CURLOPT_WRITEDATA>(&result);
+    restClient->add<CURLOPT_WRITEDATA>(&target);
     restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto result = static_cast<vector<char> *>(userp);
         char *bytes = static_cast<char *>(contents);
@@ -172,14 +162,12 @@ vector<char> MarcRestClient::performGet()
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
     if (ret != 302 && ret != 200) { // OK or redirect
-        if (result.empty())
+        if (target.empty())
             throw MailApiException("Non-success return code!", ret);
 
-        string body = result.data();
+        string body = target.data();
         throw MailApiException(string("Non-success return code! Body:") + body, ret);
     }
-
-    return result;
 }
 
 void MarcRestClient::performGetAsync(BlockingQueue<char> &p)
@@ -426,7 +414,13 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
     }
 }
 
-void MarcRestClient::upload(string remotePath, vector<char>& body)
+struct ReadData {
+    const vector<char> * const content; // content to read from
+    size_t offset; // current offset of read
+    size_t count; // maximum offset - can be lower than content.size()
+};
+
+void MarcRestClient::upload(string remotePath, vector<char> &body, size_t start, size_t count)
 {
     string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
@@ -443,11 +437,12 @@ void MarcRestClient::upload(string remotePath, vector<char>& body)
 
     // fileupload part
     curl_form nameForm;
-    ReadData ptr {&body, 0};
+    size_t realSize = min(body.size() - start, count); // size to transfer
+    ReadData ptr {&body, start, min(body.size(), start + count)};
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
                  curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
-                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(body.size())));
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(realSize)));
 
     // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_URL>(uploadUrl.data());
@@ -456,7 +451,7 @@ void MarcRestClient::upload(string remotePath, vector<char>& body)
         auto source = static_cast<ReadData *>(userp);
         auto target = static_cast<char *>(contents);
         const size_t requested = size * nmemb;
-        const size_t available = source->content->size() - source->offset;
+        const size_t available = source->count - source->offset;
         const size_t transferred = min(requested, available);
         copy_n(&source->content->front() + source->offset, transferred, target);
         source->offset += transferred;
@@ -551,11 +546,18 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
     return results;
 }
 
-std::vector<char> MarcRestClient::download(string remotePath)
+void MarcRestClient::download(string remotePath, vector<char>& target)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
-    return performGet();
+    performGet(target);
+}
+
+vector<char> MarcRestClient::download(string remotePath)
+{
+    vector<char> target;
+    download(remotePath, target);
+    return target;
 }
 
 void MarcRestClient::downloadAsync(string remotePath, BlockingQueue<char> &p)

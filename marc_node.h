@@ -23,6 +23,8 @@
 
 #include <mutex>
 
+#include "marc_api_cloudfile.h"
+
 /**
  * @brief The MarcNode class - base cache node for any filesystem entry
  */

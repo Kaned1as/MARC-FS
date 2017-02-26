@@ -19,17 +19,15 @@
  */
 
 #include <fuse.h>
+#include <algorithm>
 
+#include "marc_api.h"
 #include "marc_file_node.h"
 
+using namespace std;
 
 MarcFileNode::MarcFileNode()
 {
-}
-
-MarcFileNode::MarcFileNode(std::vector<char> &&data)
-{
-    cachedContent = std::move(data);
 }
 
 void MarcFileNode::fillStats(struct stat *stbuf) const
@@ -40,14 +38,105 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
     stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
 }
 
-uint64_t MarcFileNode::getTransferred() const
+void MarcFileNode::open(MarcRestClient *client, string path)
 {
-    return transferred;
+    if (newlyCreated) {
+        // do nothing, await for `write`s
+        return;
+    }
+
+    // not a new file, need to download
+    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+        // compound file
+        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
+        for (size_t idx = 0; idx < partCount; ++idx) {
+            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            client->download(extendedPathname, cachedContent); // append part to current cache
+        }
+    } else {
+        // single file
+        client->download(path, cachedContent);
+    }
 }
 
-void MarcFileNode::setTransferred(const uint64_t &value)
+
+void MarcFileNode::flush(MarcRestClient *client, string path)
 {
-    transferred = value;
+    // skip unchanged files
+    if (!dirty && !newlyCreated)
+        return;
+
+    // cachedContent.size() now holds current size, fileSize holds old size
+    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+        // old one was compound file - delete old parts
+        size_t oldPartCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (size_t idx = 0; idx < oldPartCount; ++idx) {
+            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            client->remove(extendedPathname);
+        }
+    }
+
+    if (cachedContent.size() > MARCFS_MAX_FILE_SIZE) {
+        // new one is compound - upload new parts
+        size_t partCount = (cachedContent.size() / MARCFS_MAX_FILE_SIZE) + 1;
+        size_t offset = 0;
+        for (size_t idx = 0; idx < partCount; ++idx) {
+            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            client->upload(extendedPathname, cachedContent, offset, MARCFS_MAX_FILE_SIZE);
+            offset += MARCFS_MAX_FILE_SIZE;
+        }
+    } else {
+        // single file
+        client->upload(path, cachedContent);
+    }
+
+    // cleanup
+    setMtime(time(nullptr));
+    dirty = false;
+    newlyCreated = false;
+}
+
+int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes)
+{
+    auto len = cachedContent.size();
+    if (offsetBytes > len)
+        return 0; // requested bytes above the size
+
+    if (offsetBytes + size > len) {
+        // requested size is more than we have
+        copy_n(&cachedContent.front() + offsetBytes, len - offsetBytes, buf);
+        return static_cast<int>(len - offsetBytes);
+    }
+
+    // normal operation
+    copy_n(&cachedContent.front() + offsetBytes, size, buf);
+    return static_cast<int>(size);
+}
+
+int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
+{
+    if (offsetBytes + size > cachedContent.size()) {
+        cachedContent.resize(offsetBytes + size);
+    }
+
+    copy_n(buf, size, &cachedContent.front() + offsetBytes);
+    dirty = true;
+    return static_cast<int>(size);
+}
+
+void MarcFileNode::remove(MarcRestClient *client, string path)
+{
+    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+        // compound file, remove each part
+        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (size_t idx = 0; idx < partCount; ++idx) {
+            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            client->remove(extendedPathname); // append part to current cache
+        }
+    } else {
+        // single file
+        client->remove(path);
+    }
 }
 
 bool MarcFileNode::isDirty() const
@@ -62,22 +151,22 @@ void MarcFileNode::setDirty(bool value)
 
 void MarcFileNode::setSize(size_t size)
 {
-    this->size = size;
+    this->fileSize = size;
 }
 
-std::vector<char>& MarcFileNode::getCachedContent()
+vector<char>& MarcFileNode::getCachedContent()
 {
     return cachedContent;
 }
 
-void MarcFileNode::setCachedContent(const std::vector<char> &value)
+void MarcFileNode::setCachedContent(const vector<char> &value)
 {
     cachedContent = value;
 }
 
-void MarcFileNode::setCachedContent(const std::vector<char> &&value)
+void MarcFileNode::setCachedContent(const vector<char> &&value)
 {
-    cachedContent = std::move(value);
+    cachedContent = move(value);
 }
 
 size_t MarcFileNode::getSize() const
@@ -85,5 +174,15 @@ size_t MarcFileNode::getSize() const
     if (!cachedContent.empty())
         return cachedContent.size();
 
-    return size;
+    return fileSize;
+}
+
+bool MarcFileNode::isNewlyCreated() const
+{
+    return newlyCreated;
+}
+
+void MarcFileNode::setNewlyCreated(bool value)
+{
+    newlyCreated = value;
 }

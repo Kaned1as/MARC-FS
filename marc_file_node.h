@@ -25,6 +25,8 @@
 
 #include "marc_node.h"
 
+class MarcRestClient;
+
 /**
  * @brief The MarcFileNode class - cached node of regular file on the cloud
  */
@@ -32,21 +34,25 @@ class MarcFileNode : public MarcNode
 {
 public:
     MarcFileNode();
-    MarcFileNode(std::vector<char> &&data);
 
-    void fillStats(struct stat *stbuf) const override;
-
-    uint64_t getTransferred() const;
-    void setTransferred(const uint64_t &value);
+    virtual void fillStats(struct stat *stbuf) const override;
+    virtual void open(MarcRestClient *client, std::string path);
+    virtual void flush(MarcRestClient *client, std::string path);
+    virtual int read(char *buf, size_t size, uint64_t offsetBytes);
+    virtual int write(const char *buf, size_t size, uint64_t offsetBytes);
+    virtual void remove(MarcRestClient *client, std::string path);
 
     bool isDirty() const;
     void setDirty(bool value);
 
-    void setSize(size_t size);
+    void setSize(size_t fileSize);
 
     std::vector<char>& getCachedContent();
     void setCachedContent(const std::vector<char> &value);
     void setCachedContent(const std::vector<char> &&value);
+
+    bool isNewlyCreated() const;
+    void setNewlyCreated(bool value);
 
 private:
     size_t getSize() const;
@@ -58,16 +64,14 @@ private:
      */
     std::vector<char> cachedContent;
     /**
-     * @brief transferred - number of bytes transferred so far. Needed for
-     *        sequential transfer, see @ref MarcFileNode.transfer field.
-     */
-    uint64_t transferred = 0;
-    /**
      * @brief dirty - used to indicate whether subsequent upload is needed
      */
     bool dirty = false;
-
-    size_t size = 0;
+    bool newlyCreated = false;
+    /**
+     * @brief fileSize - holds size that was passed from cloud (or sum of compounds)
+     */
+    size_t fileSize = 0;
 };
 
 #endif // MARC_FILE_NODE_H
