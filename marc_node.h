@@ -48,8 +48,6 @@ public:
     std::mutex& getMutex();
 
 private:
-    std::mutex mutex;
-
     time_t mtime = 0;
 };
 

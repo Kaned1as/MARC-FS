@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <memory>
+#include <condition_variable>
 
 #include "marc_node.h"
 #include "abstract_storage.h"
@@ -44,6 +45,7 @@ public:
     int write(const char *buf, size_t size, uint64_t offsetBytes);
     void remove(MarcRestClient *client, std::string path);
     void truncate(off_t size);
+    void release();
 
     bool isDirty() const;
     void setDirty(bool value);
@@ -54,6 +56,8 @@ public:
 
     bool isNewlyCreated() const;
     void setNewlyCreated(bool value);
+
+    bool isOpen() const;
 
 private:
     size_t getSize() const;
@@ -70,6 +74,13 @@ private:
      * @brief fileSize - holds size that was passed from cloud (or sum of compounds)
      */
     size_t fileSize = 0;
+    /**
+     * @brief openMutex - mutex that guards opening the file. Only one thread
+     *        should work with the file keeping it open
+     */
+    std::mutex openMutex;
+    std::condition_variable openedCondition;
+    bool opened = false;
 };
 
 #endif // MARC_FILE_NODE_H

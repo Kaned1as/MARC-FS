@@ -29,6 +29,8 @@ MarcDirNode::MarcDirNode()
 
 void MarcDirNode::fillStats(struct stat *stbuf) const
 {
+    // Mail.ru Cloud doesn't have mtime for dirs, sadly
+    // so expect all mtimes of folders to be Jan 1 1970
     MarcNode::fillStats(stbuf);
     stbuf->st_mode = S_IFDIR | 0700;
     stbuf->st_nlink = 2;

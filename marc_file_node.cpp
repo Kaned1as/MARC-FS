@@ -54,8 +54,12 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
 
 void MarcFileNode::open(MarcRestClient *client, string path)
 {
+    unique_lock<mutex> guard(openMutex);
+    openedCondition.wait(guard, [this]{ return !opened; });
+
     // initialize storage
     cachedContent->open();
+    opened = true;
 
     if (newlyCreated) {
         // do nothing, await for `write`s
@@ -147,6 +151,17 @@ void MarcFileNode::truncate(off_t size)
     dirty = true;
 }
 
+void MarcFileNode::release()
+{
+    {
+        unique_lock<mutex> guard(openMutex);
+        fileSize = cachedContent->size(); // set cached size to last content size before clearing
+        cachedContent->clear(); // forget contents of a node
+        opened = false;
+    }
+    openedCondition.notify_one();
+}
+
 bool MarcFileNode::isDirty() const
 {
     return dirty;
@@ -183,4 +198,9 @@ bool MarcFileNode::isNewlyCreated() const
 void MarcFileNode::setNewlyCreated(bool value)
 {
     newlyCreated = value;
+}
+
+bool MarcFileNode::isOpen() const
+{
+    return opened;
 }

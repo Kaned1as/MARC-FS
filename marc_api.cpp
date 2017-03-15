@@ -109,7 +109,7 @@ string MarcRestClient::performPost()
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
 
-    ScopeGuard resetter = [&]() { restClient->reset(); };
+    ScopeGuard resetter = [&] { restClient->reset(); };
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
@@ -139,7 +139,7 @@ void MarcRestClient::performGet(Container &target)
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
 
-    ScopeGuard resetter = [&]() { restClient->reset(); };
+    ScopeGuard resetter = [&] { restClient->reset(); };
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
@@ -458,6 +458,7 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
 
     string getFields = paramString({
         {"api", "2"},
+        {"limit", "100500" }, // 100500 files in folder - who'd dare for more?
         {"token", authToken},
         {"home", remotePath}
     });

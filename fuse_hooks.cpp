@@ -43,9 +43,9 @@ const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 using namespace std;
 
 // explicit instantiation declarations
-extern template LockHolder<MarcNode> MruData::getNode(string);
-extern template LockHolder<MarcFileNode> MruData::getNode(string);
-extern template LockHolder<MarcDirNode> MruData::getNode(string);
+extern template MarcNode* MruData::getNode(string);
+extern template MarcFileNode* MruData::getNode(string);
+extern template MarcDirNode* MruData::getNode(string);
 extern template void MruData::create<MarcDirNode>(string);
 extern template void MruData::create<MarcFileNode>(string);
 
@@ -281,9 +281,7 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto file = fsMetadata.getNode<MarcFileNode>(path);
-    auto &vec = file->getCachedContent();
-    file->setSize(vec.size()); // set cached size to last content size before clearing
-    vec.clear(); // forget contents of a node
+    file->release();
 
     return 0;
 }
@@ -306,34 +304,38 @@ int rmdirCallback(const char *path)
         return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
     client->remove(path);
-    fsMetadata.purgeCache(path);
+    return fsMetadata.purgeCache(path);
     API_CALL_TRY_FINISH
-
-    return 0;
 }
 
 int unlinkCallback(const char *path)
 {
+    // IMPORTANT!
+    // if a file is in rw-lock (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
+    // calls QUEUE PATH on this node and waits till the file is released
+    // then calls DEQUEUE PATH on this node and calls:
+    // 1.      rename file -> .fuse_hidden{...}
+    //    e.g. rename /test/VTS_03_2.VOB -> /test/.fuse_hidden000063dd00000001
+    // 2.      release file .fuse_hidden{...}
+    // 3.      unlink file .fuse_hidden{...}
+
     API_CALL_TRY_BEGIN
     {
         auto file = fsMetadata.getNode<MarcFileNode>(path);
         file->remove(client.get(), path);
-        // -- unlock --
+        // -- unlock cache mutex --
     }
-    fsMetadata.purgeCache(path);
+    return fsMetadata.purgeCache(path);
     API_CALL_TRY_FINISH
-
-    return 0;
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
 {
     API_CALL_TRY_BEGIN
+    // if we write new file and try to rename it while flushing to cloud
+    // it will fail here with -EIO as actual addition happens only after file is uploaded
     client->rename(oldPath, newPath);
-    // FIXME: readdir cache will be corrupted!
-    // TODO: just move in cache too
-    fsMetadata.purgeCache(oldPath);
-    fsMetadata.purgeCache(newPath);
+    fsMetadata.renameCache(oldPath, newPath);
     API_CALL_TRY_FINISH
 
     return 0;

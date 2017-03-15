@@ -66,15 +66,16 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - very big memory footprint due to 
-      - reading files into memory when reading/writing (not sure how this can be circumvented, see API limitation)
+  - big memory footprint due to 
       - SSL engine sessions - tend to become bigger with time (WIP)
       - heap fragmentation (WIP)
+      - MADV_FREE - lazy memory reclaiming in Linux > 4.5 (not a bug actually)
   - On RHEL-based distros (CentOS/Fedora) you may need `NSS_STRICT_NOFORK=DISABLED` environment variable (see [this](https://gitlab.com/Kanedias/MARC-FS/issues/6) and [this](https://bugzilla.redhat.com/show_bug.cgi?id=1317691))
 2. Principal (Mail.ru Cloud API limitations)
-  - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
+  - ~~No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)~~
   - No extended attr/chmod support, all files on storage are owned by you
   - No atime/ctime support, only mtime is stored
+  - No mtime support for directories, expect all of them to have `Jan 1 1970` date in `ls`
   - No `Transfer-Encoding: chunked` support for POST **requests** in cloud nginx (`chunkin on`/`proxy_request_buffering` options in `nginx`/`tengine` config), so files are read fully into memory before uploading
 
 Contributions

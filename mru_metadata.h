@@ -67,7 +67,7 @@ public:
      * @return ptr to obtained file node
      */
     template<typename T>
-    LockHolder<T> getNode(std::string path);
+    T* getNode(std::string path);
 
     /**
      * @brief putCacheStat - write stat information to associated file/dir
@@ -90,7 +90,14 @@ public:
      * @note this takes/releases cache lock
      * @param path path to clear cache for
      */
-    void purgeCache(std::string path);
+    int purgeCache(std::string path);
+
+    /**
+     * @brief renameCache - rename file in cache- leave everything intact
+     * @param oldPath - old path to file
+     * @param newPath - new path to file
+     */
+    void renameCache(std::string oldPath, std::string newPath);
 
     /**
      * @brief tryFillDir - tries to fill FUSE directory handle with cached content
