@@ -252,77 +252,6 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     return 0;
 }
 
-
-//int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
-//{
-//    auto offsetBytes = static_cast<uint64_t>(offset);
-//    uint64_t readNow = 0;
-//    auto callRead = [&](auto &pipe) {
-//        while (!pipe.exhausted()) {
-//            // get next chunk, possibly blocking
-//            readNow += pipe.pop(buf + readNow, size - readNow); // actual transfer of bytes to the buffer
-//            if (readNow == size) // reached limit
-//                break;
-//        }
-//    };
-    
-//    // we're reading this file, try to pipe it from the cloud
-//    if (offsetBytes == 0) { // that's a start
-//        // set up async API transfer that will fill our queue
-//        // api object will return to the pool once download is complete
-//        auto &pipe = fsMetadata.createTransfer(path);
-//        auto handle = [&]() {
-//            auto api = fsMetadata.clientPool.acquire();
-//            auto file = fsMetadata.getOrCreateFile(path);
-//            api->downloadAsync(path, pipe);
-//        };
-//        thread(handle).detach();
-
-//        callRead(pipe);
-//    } else {
-//        auto &pipe = fsMetadata.getTransfer(path);
-//        if (offsetBytes == pipe.getTransferred()) { // that's continuation of previous call
-//        // transfer must already been set, continue
-//            callRead(pipe);
-//        } else {
-//            // attempt to read a file not sequentially, abort
-//            return -EBADE;
-//        }
-//    }
-
-//    return static_cast<int>(readNow);
-//}
-
-// not working, see header file
-//int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset,struct fuse_file_info */*fi*/)
-//{
-//    auto offsetBytes = static_cast<uint64_t>(offset);
-//    auto &file = fsMetadata.obtainFile(path);
-
-//    auto writtenAlready = file->getTransferred();
-//    vector<char> vec(buf, buf + size);
-//    // we're writing this file, try to send it chunked to the cloud
-//    if (offsetBytes == 0) { // that's a start
-//        auto api = fsMetadata.clientPool.acquire();
-//        // set up async API transfer that will fill our queue
-//        auto handle = bind(&MarcRestClient::uploadAsync, api.get(), path, ref(file->getTransfer()));
-//        thread(handle).detach();
-
-//        file->getTransfer().push(vec); // actual transfer of bytes to the queue
-//        file->setTransferred(writtenAlready + size);
-//    } else if (offsetBytes == writtenAlready) { // that's continuation of previous call
-//        // transfer must already been set, continue
-//        file->getTransfer().push(vec);
-//    } else {
-//        // attempt to write a file not sequentially, abort
-//        return -EBADE;
-//    }
-
-//    file->setDirty(true);
-//    file->setTransferred(writtenAlready + size);
-//    return static_cast<int>(size);
-//}
-
 int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
 {
     auto offsetBytes = static_cast<uint64_t>(offset);
@@ -355,7 +284,6 @@ int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
     auto &vec = file->getCachedContent();
     file->setSize(vec.size()); // set cached size to last content size before clearing
     vec.clear(); // forget contents of a node
-    vec.shrink_to_fit();
 
     return 0;
 }
@@ -414,10 +342,7 @@ int renameCallback(const char *oldPath, const char *newPath)
 int truncateCallback(const char *path, off_t size)
 {
     auto file = fsMetadata.getNode<MarcFileNode>(path);
-
-    auto &vec = file->getCachedContent();
-    vec.resize(static_cast<uint64_t>(size));
-    file->setDirty(true);
+    file->truncate(size);
     return 0;
 }
 

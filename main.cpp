@@ -18,9 +18,10 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/stat.h> // stat syscall
 #include <cstddef> // offsetof macro
 #include <string.h>
-#include <unistd.h>
+#include <unistd.h> // getuid
 
 #include "fuse_hooks.h"
 #include "account.h"
@@ -31,13 +32,17 @@
 
 using namespace std;
 
-// global MruData instance
+// global MruData instance definition
 MruData fsMetadata;
 
+// config struct declaration for cmdline parsing
 struct marcfs_config {
      char *username;
      char *password;
+     char *cachedir;
 };
+
+// non-value options
 enum {
     KEY_HELP,
     KEY_VERSION
@@ -46,6 +51,7 @@ enum {
 static struct fuse_opt marcfs_opts[] = {
      MARC_FS_OPT("username=%s",   username, 0),
      MARC_FS_OPT("password=%s",   password, 0),
+     MARC_FS_OPT("cachedir=%s",   cachedir, 0),
 
      FUSE_OPT_KEY("-V",         KEY_VERSION),
      FUSE_OPT_KEY("--version",  KEY_VERSION),
@@ -54,6 +60,7 @@ static struct fuse_opt marcfs_opts[] = {
      FUSE_OPT_END
 };
 
+// handling non-value options
 static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct fuse_args *outargs)
 {
     switch (key) {
@@ -69,6 +76,7 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
             "MARC-FS options:\n"
             "    -o username=STRING - username for your mail.ru mailbox\n"
             "    -o password=STRING - password for the above\n"
+            "    -o cachedir=STRING - cache dir for not storing everything in RAM\n"
             , outargs->argv[0]);
             exit(1);
         case KEY_VERSION:
@@ -134,15 +142,30 @@ int main(int argc, char *argv[])
         return 2;
     }
 
+    // hide credentials from htop/top/ps output
     hide_sensitive(argc, argv);
 
-    // initialize auth and globals
+    // initialize auth and connections
     Account acc;
     acc.setLogin(conf.username);
     acc.setPassword(conf.password);
     MarcRestClient rc;
-    rc.login(acc);
+    rc.login(acc); // authenticate one instance to populate pool
     fsMetadata.clientPool.populate(rc, 5);
+
+    // initialize cache dir
+    if (conf.cachedir) {
+        struct stat info = {};
+        stat(conf.cachedir, &info);
+        if (!(info.st_mode & S_IFDIR)) { // not a dir
+            cout << "cachedir option is invalid: "
+                 << conf.cachedir << " directory not found" << endl;
+            return 1;
+        }
+
+        // cache dir is valid
+        fsMetadata.cacheDir = conf.cachedir;
+    }
 
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};

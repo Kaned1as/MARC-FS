@@ -56,20 +56,4 @@ int rmdirCallback(const char *path);
 int unlinkCallback(const char *path);
 int renameCallback(const char *oldPath, const char *newPath);
 
-
-// async callbacks - not implemented fully
-
-/**
- * @brief readCallbackAsync - read callback implementation for reading files on FUSE filesystem
- *
- * @note readCallbackAsync is done with two threads - one is calling thread and it reads data
- *       into provided buf of calling process, second is downloading thread and it downloads
- *       a file chunk by chunk from the server.
- */
-//int readCallbackAsync(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-/**
- * @note writeCallbackAsync - doesn't work due to cloud API limitation, see @fn write_callback
- */
-//int writeCallbackAsync(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-
 #endif // FUSE_HOOKS_H

@@ -22,8 +22,10 @@
 #define MARC_FILE_NODE_H
 
 #include <vector>
+#include <memory>
 
 #include "marc_node.h"
+#include "abstract_storage.h"
 
 class MarcRestClient;
 
@@ -36,20 +38,19 @@ public:
     MarcFileNode();
 
     virtual void fillStats(struct stat *stbuf) const override;
-    virtual void open(MarcRestClient *client, std::string path);
-    virtual void flush(MarcRestClient *client, std::string path);
-    virtual int read(char *buf, size_t size, uint64_t offsetBytes);
-    virtual int write(const char *buf, size_t size, uint64_t offsetBytes);
-    virtual void remove(MarcRestClient *client, std::string path);
+    void open(MarcRestClient *client, std::string path);
+    void flush(MarcRestClient *client, std::string path);
+    int read(char *buf, size_t size, uint64_t offsetBytes);
+    int write(const char *buf, size_t size, uint64_t offsetBytes);
+    void remove(MarcRestClient *client, std::string path);
+    void truncate(off_t size);
 
     bool isDirty() const;
     void setDirty(bool value);
 
     void setSize(size_t fileSize);
 
-    std::vector<char>& getCachedContent();
-    void setCachedContent(const std::vector<char> &value);
-    void setCachedContent(const std::vector<char> &&value);
+    AbstractStorage& getCachedContent();
 
     bool isNewlyCreated() const;
     void setNewlyCreated(bool value);
@@ -57,12 +58,9 @@ public:
 private:
     size_t getSize() const;
     /**
-     * @brief cachedContent - used for small files and random writes/reads
-     *
-     * If file is read/written at random locations, we try to cache it fully before
-     * doing operations.
+     * @brief cachedContent - backing storage for open-write/read-release sequence
      */
-    std::vector<char> cachedContent;
+    std::unique_ptr<AbstractStorage> cachedContent;
     /**
      * @brief dirty - used to indicate whether subsequent upload is needed
      */

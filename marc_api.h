@@ -27,7 +27,6 @@
 
 #include "curl_cookie.h"
 
-#include "blocking_queue.h"
 #include "utils.h"
 
 #define MARCFS_MAX_FILE_SIZE (1L << 31) // 2 GB
@@ -35,7 +34,7 @@
 #define MARCFS_SUFFIX ".marcfs-part-"
 
 /**
- * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru CLoud API.
+ * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru Cloud API.
  *
  * This class is used in an object pool to perform various lookups/calls to Mail.ru cloud.
  * It operates via cURL calls to specified endpoints. There is no public Cloud docs exposed
@@ -74,18 +73,8 @@ public:
      * @brief upload uploads bytes in @param body to remote endpoint
      * @param remotePath remote path to folder where uploaded file should be (e.g. /newfolder)
      */
-    void upload(std::string remotePath, std::vector<char> &body, size_t start = 0, size_t count = SIZE_MAX);
-
-    /**
-     * @brief uploadAsync - async version of @fn upload call
-     *
-     * @note DOES NOT WORK - REST API's nginx server doesn't support chunked POST
-     * requests.
-     *
-     * @param remotePath - remote path
-     * @param p - pipe to read data from
-     */
-    void uploadAsync(std::string remotePath, BlockingQueue<char> &p);
+    template<typename Container>
+    void upload(std::string remotePath, Container &body, size_t start = 0, size_t count = SIZE_MAX);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
@@ -105,18 +94,8 @@ public:
      * @param remotePath remote path on cloud server
      * @param target target of download operation - resulting bytes are appended there
      */
-    void download(std::string remotePath, std::vector<char> &target);
-    /**
-     * @brief download - returning version of this func
-     */
-    std::vector<char> download(std::string remotePath);
-
-    /**
-     * @brief downloadAsync - async version of @fn download call
-     * @param remotePath - path from where download file to (e.g. /file.txt)
-     * @param p - pipe to store downloaded bytes to
-     */
-    void downloadAsync(std::string remotePath, BlockingQueue<char> &p);
+    template<typename Container>
+    void download(std::string remotePath, Container &target);
 
     /**
      * @brief remove removes file pointed by remotePath from cloud storage
@@ -210,9 +189,9 @@ private:
     // cURL helpers
     std::string paramString(Params const &params);
     std::string performPost();
-    void performGet(std::vector<char> &target);
-    void performGetAsync(BlockingQueue<char> &p);
-    void performPostAsync(BlockingQueue<char> &p);
+
+    template<typename Container>
+    void performGet(Container &target);
 
     std::unique_ptr<curl::curl_easy> restClient;
     curl::curl_cookie cookieStore;

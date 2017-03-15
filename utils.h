@@ -96,7 +96,39 @@ private:
     std::function<void()> func;
 };
 
+/**
+ * RAII-style helper class to wrap file-based locking transparently. On creation the instance obtains
+ * the lock of contained file, on destruction the lock is released.
+ *
+ * @see MruData::getNode
+ * @see fuse_hooks.cpp
+ */
+template <typename T>
+struct LockHolder {
+    LockHolder()
+        : content(nullptr), scopeLock()
+    {
+    }
 
+    explicit LockHolder(T* node)
+        : content(node), scopeLock(node->getMutex())
+    {
+    }
+
+    T* operator->() const noexcept {
+      return content;
+    }
+
+    operator bool() const {
+        return content;
+    }
+
+private:
+    T* content;
+    std::unique_lock<std::mutex> scopeLock;
+};
+
+// C-style functions for cURL
 void dump(const char *text, FILE *stream, unsigned char *ptr, size_t size, char nohex);
 int trace_post(CURL *handle, curl_infotype type, char *data, size_t size, void *userp);
 

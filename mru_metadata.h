@@ -33,38 +33,6 @@
 class CloudFile;
 
 /**
- * RAII-style helper class to wrap file-based locking transparently. On creation the instance obtains
- * the lock of contained file, on destruction the lock is released.
- *
- * @see MruData::getNode
- * @see fuse_hooks.cpp
- */
-template <typename T>
-struct LockHolder {
-    LockHolder()
-        : content(nullptr), scopeLock()
-    {
-    }
-
-    explicit LockHolder(T* node)
-        : content(node), scopeLock(node->getMutex())
-    {
-    }
-
-    T* operator->() const noexcept {
-      return content;
-    }
-
-    operator bool() const {
-        return content;
-    }
-
-private:
-    T* content;
-    std::unique_lock<std::mutex> scopeLock;
-};
-
-/**
  * @brief The MruData class - filesystem-wide metadata and caching for the mounted filesystem.
  *
  * As FUSE is multithreaded, caching and file operations all use locking quite heavily.
@@ -80,6 +48,11 @@ private:
 class MruData {
 public:
     ObjectPool<MarcRestClient> clientPool;
+    /**
+     * @brief cacheDir - cache directory, is set only on option parsing,
+     *        constant everywhere else in runtime
+     */
+    std::string cacheDir;
 
     /**
      * @brief getNode - retrieves node if it exists and of the requested type

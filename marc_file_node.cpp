@@ -22,12 +22,26 @@
 #include <algorithm>
 
 #include "marc_api.h"
+#include "mru_metadata.h"
 #include "marc_file_node.h"
+#include "memory_storage.h"
+#include "file_storage.h"
 
 using namespace std;
 
+extern MruData fsMetadata;
+
+// template instantiation declarations
+extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, size_t start, size_t count);
+extern template void MarcRestClient::download(string remotePath, AbstractStorage& target);
+
 MarcFileNode::MarcFileNode()
 {
+    if (fsMetadata.cacheDir.empty()) {
+        cachedContent.reset(new MemoryStorage);
+    } else {
+        cachedContent.reset(new FileStorage);
+    }
 }
 
 void MarcFileNode::fillStats(struct stat *stbuf) const
@@ -40,6 +54,9 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
 
 void MarcFileNode::open(MarcRestClient *client, string path)
 {
+    // initialize storage
+    cachedContent->open();
+
     if (newlyCreated) {
         // do nothing, await for `write`s
         return;
@@ -51,11 +68,11 @@ void MarcFileNode::open(MarcRestClient *client, string path)
         size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
         for (size_t idx = 0; idx < partCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
-            client->download(extendedPathname, cachedContent); // append part to current cache
+            client->download(extendedPathname, *cachedContent); // append part to current cache
         }
     } else {
         // single file
-        client->download(path, cachedContent);
+        client->download(path, *cachedContent);
     }
 }
 
@@ -76,18 +93,18 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
         }
     }
 
-    if (cachedContent.size() > MARCFS_MAX_FILE_SIZE) {
+    if (cachedContent->size() > MARCFS_MAX_FILE_SIZE) {
         // new one is compound - upload new parts
-        size_t partCount = (cachedContent.size() / MARCFS_MAX_FILE_SIZE) + 1;
+        size_t partCount = (cachedContent->size() / MARCFS_MAX_FILE_SIZE) + 1;
         size_t offset = 0;
         for (size_t idx = 0; idx < partCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
-            client->upload(extendedPathname, cachedContent, offset, MARCFS_MAX_FILE_SIZE);
+            client->upload(extendedPathname, *cachedContent, offset, MARCFS_MAX_FILE_SIZE);
             offset += MARCFS_MAX_FILE_SIZE;
         }
     } else {
         // single file
-        client->upload(path, cachedContent);
+        client->upload(path, *cachedContent);
     }
 
     // cleanup
@@ -98,30 +115,15 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
 
 int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes)
 {
-    auto len = cachedContent.size();
-    if (offsetBytes > len)
-        return 0; // requested bytes above the size
-
-    if (offsetBytes + size > len) {
-        // requested size is more than we have
-        copy_n(&cachedContent.front() + offsetBytes, len - offsetBytes, buf);
-        return static_cast<int>(len - offsetBytes);
-    }
-
-    // normal operation
-    copy_n(&cachedContent.front() + offsetBytes, size, buf);
-    return static_cast<int>(size);
+    return cachedContent->read(buf, size, offsetBytes);
 }
 
 int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
 {
-    if (offsetBytes + size > cachedContent.size()) {
-        cachedContent.resize(offsetBytes + size);
-    }
-
-    copy_n(buf, size, &cachedContent.front() + offsetBytes);
-    dirty = true;
-    return static_cast<int>(size);
+    int res = cachedContent->write(buf, size, offsetBytes);
+    if (res > 0)
+        dirty = true;
+    return res;
 }
 
 void MarcFileNode::remove(MarcRestClient *client, string path)
@@ -139,6 +141,12 @@ void MarcFileNode::remove(MarcRestClient *client, string path)
     }
 }
 
+void MarcFileNode::truncate(off_t size)
+{
+    cachedContent->truncate(size);
+    dirty = true;
+}
+
 bool MarcFileNode::isDirty() const
 {
     return dirty;
@@ -154,25 +162,15 @@ void MarcFileNode::setSize(size_t size)
     this->fileSize = size;
 }
 
-vector<char>& MarcFileNode::getCachedContent()
+AbstractStorage& MarcFileNode::getCachedContent()
 {
-    return cachedContent;
-}
-
-void MarcFileNode::setCachedContent(const vector<char> &value)
-{
-    cachedContent = value;
-}
-
-void MarcFileNode::setCachedContent(const vector<char> &&value)
-{
-    cachedContent = move(value);
+    return *cachedContent.get();
 }
 
 size_t MarcFileNode::getSize() const
 {
-    if (!cachedContent.empty())
-        return cachedContent.size();
+    if (!cachedContent->empty())
+        return cachedContent->size();
 
     return fileSize;
 }
