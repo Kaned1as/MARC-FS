@@ -29,7 +29,7 @@
 using namespace std;
 
 template<typename T>
-LockHolder<T> MruData::getNode(string path) {
+T* MruData::getNode(string path) {
     lock_guard<mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
@@ -37,17 +37,17 @@ LockHolder<T> MruData::getNode(string path) {
         if (!node)
             throw invalid_argument("Expected another type in node " + path);
 
-        return LockHolder<T>(node);
+        return node;
     }
 
-    return LockHolder<T>();
+    return nullptr;
 }
 
 // instantiations
-template LockHolder<MarcNode> MruData::getNode(string path);
-template LockHolder<MarcFileNode> MruData::getNode(string path);
-template LockHolder<MarcDirNode> MruData::getNode(string path);
-template LockHolder<MarcDummyNode> MruData::getNode(string path);
+template MarcNode* MruData::getNode(string path);
+template MarcFileNode* MruData::getNode(string path);
+template MarcDirNode* MruData::getNode(string path);
+template MarcDummyNode* MruData::getNode(string path);
 
 template<typename T>
 void MruData::create(string path) {
@@ -69,7 +69,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
-        return;
+        return; // may happen if getattr for absolute path happens, then readdir of parent folder
 
     if (!cf) {
         // mark non-existing
@@ -94,20 +94,29 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
     cache[path] = unique_ptr<MarcNode>(node);
 }
 
-void MruData::purgeCache(string path) {
+int MruData::purgeCache(string path) {
     lock_guard<mutex> lock(cacheLock);
     auto it = cache.find(path);
 
     // node doesn't exist
     if (it == cache.end())
-        return;
+        return 0;
 
-    // node exists in cache, deal with it
-    // nobody can alter map now, we're holding cacheLock
-    // but some thread may own file, wait for it to release
-    it->second->getMutex().lock(); // obtain lock, wait if necessary
-    it->second->getMutex().unlock();
+    MarcFileNode* node = dynamic_cast<MarcFileNode*>(it->second.get());
+    if (node && node->isOpen()) {
+        // we can't delete a file if it's open, should wait when it's closed
+        return -EINPROGRESS;
+    }
+
     cache.erase(it);
+    return 0;
+}
+
+void MruData::renameCache(string oldPath, string newPath)
+{
+    lock_guard<mutex> lock(cacheLock);
+    cache[newPath].swap(cache[oldPath]);
+    cache[oldPath].reset(new MarcDummyNode);
 }
 
 bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)

@@ -15,6 +15,7 @@ Features
 - `rm`, `cp`, `ls`, `rmdir`, `touch`, `grep` and so on are working
 - filesystem stats are working, can check with `df`
 - multithreaded, you can work with multiple files at once
+- support for files > 2GB by seamless splitting/joining uploaded/downloaded files
 
 Installation
 ------------
@@ -27,7 +28,7 @@ MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. 
     $ cd build && cmake ..
     $ make
     $ # here goes the step where you actually go and register on mail.ru website to obtain cloud storage and auth info
-    $ ./marcfs /path/to/mount/folder -o username=your.email@mail.ru,password=your.password
+    $ ./marcfs /path/to/mount/folder -o username=your.email@mail.ru,password=your.password,cachedir=/path/to/cache
 
 If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncFS filesystem to achieve this:
 
@@ -49,6 +50,19 @@ To unmount previously mounted share, make sure no one uses it and execute:
     $ # fusermount -u /path/to/mount/folder/encrypted
     $ fusermount -u /path/to/mount/folder
 
+Note about cache dir
+-------------------
+
+MARC-FS has two modes of operation. If no cachedir option is given, it stores all intermediate download/upload 
+data directly in memory. If you copy large files as HD movies or ISO files, it may eat up your RAM pretty quickly,
+so be careful. This one is useful if you want to copy your photo library to/from the cloud - this will actually take
+a lot less time than with second option.
+
+If cachedir option is given, MARC-FS stores all intermediate data there. It means, all files that are currently open
+in some process, copied/read or being edited - will have their data stored in this dir. This may sound like plenty 
+of space, but most software execute file operations sequentally, so in case of copying large media library on/from 
+the cloud you won't need more free space than largest one of the files occupies.
+
 API references
 --------------
 - There is no official Mail.ru Cloud API reference, everything is reverse-engineered. You may refer to [Doxygen API comments](https://gitlab.com/Kanedias/MARC-FS/blob/master/marc_api.h) to grasp concept of what's going on.
@@ -66,15 +80,16 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - very big memory footprint due to 
-      - reading files into memory when reading/writing (not sure how this can be circumvented, see API limitation)
+  - SOme issues may arise if you delete/move file that is currently copied or read. Please report such bugs here.
+  - big memory footprint due to 
       - SSL engine sessions - tend to become bigger with time (WIP)
       - heap fragmentation (WIP)
+      - MADV_FREE - lazy memory reclaiming in Linux > 4.5 (not a bug actually)
   - On RHEL-based distros (CentOS/Fedora) you may need `NSS_STRICT_NOFORK=DISABLED` environment variable (see [this](https://gitlab.com/Kanedias/MARC-FS/issues/6) and [this](https://bugzilla.redhat.com/show_bug.cgi?id=1317691))
 2. Principal (Mail.ru Cloud API limitations)
-  - No support for files larger than 2GB (can be circumvented by splitting files in chunks, patches welcome)
   - No extended attr/chmod support, all files on storage are owned by you
   - No atime/ctime support, only mtime is stored
+  - No mtime support for directories, expect all of them to have `Jan 1 1970` date in `ls`
   - No `Transfer-Encoding: chunked` support for POST **requests** in cloud nginx (`chunkin on`/`proxy_request_buffering` options in `nginx`/`tengine` config), so files are read fully into memory before uploading
 
 Contributions

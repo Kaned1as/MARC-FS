@@ -33,38 +33,6 @@
 class CloudFile;
 
 /**
- * RAII-style helper class to wrap file-based locking transparently. On creation the instance obtains
- * the lock of contained file, on destruction the lock is released.
- *
- * @see MruData::getNode
- * @see fuse_hooks.cpp
- */
-template <typename T>
-struct LockHolder {
-    LockHolder()
-        : content(nullptr), scopeLock()
-    {
-    }
-
-    explicit LockHolder(T* node)
-        : content(node), scopeLock(node->getMutex())
-    {
-    }
-
-    T* operator->() const noexcept {
-      return content;
-    }
-
-    operator bool() const {
-        return content;
-    }
-
-private:
-    T* content;
-    std::unique_lock<std::mutex> scopeLock;
-};
-
-/**
  * @brief The MruData class - filesystem-wide metadata and caching for the mounted filesystem.
  *
  * As FUSE is multithreaded, caching and file operations all use locking quite heavily.
@@ -80,6 +48,11 @@ private:
 class MruData {
 public:
     ObjectPool<MarcRestClient> clientPool;
+    /**
+     * @brief cacheDir - cache directory, is set only on option parsing,
+     *        constant everywhere else in runtime
+     */
+    std::string cacheDir;
 
     /**
      * @brief getNode - retrieves node if it exists and of the requested type
@@ -94,7 +67,7 @@ public:
      * @return ptr to obtained file node
      */
     template<typename T>
-    LockHolder<T> getNode(std::string path);
+    T* getNode(std::string path);
 
     /**
      * @brief putCacheStat - write stat information to associated file/dir
@@ -117,7 +90,14 @@ public:
      * @note this takes/releases cache lock
      * @param path path to clear cache for
      */
-    void purgeCache(std::string path);
+    int purgeCache(std::string path);
+
+    /**
+     * @brief renameCache - rename file in cache- leave everything intact
+     * @param oldPath - old path to file
+     * @param newPath - new path to file
+     */
+    void renameCache(std::string oldPath, std::string newPath);
 
     /**
      * @brief tryFillDir - tries to fill FUSE directory handle with cached content

@@ -57,8 +57,3 @@ void MarcNode::fillStats(struct stat *stbuf) const
     stbuf->st_mtimespec.tv_sec = mtime;
 #endif
 }
-
-std::mutex& MarcNode::getMutex()
-{
-    return mutex;
-}

@@ -20,8 +20,13 @@
 
 #include "gtest/gtest.h"
 #include "../marc_api.h"
+#include "../memory_storage.h"
 
 using namespace std;
+
+// template instantiation declarations
+extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, size_t start, size_t count);
+extern template void MarcRestClient::download(string remotePath, AbstractStorage& target);
 
 MarcRestClient* setUpMrc() {
     static MarcRestClient* mrc = nullptr;
@@ -85,8 +90,8 @@ TEST(ApiIntegrationTesting, TestShowUsage) {
 
 TEST(ApiIntegrationTesting, TestCreateFile) {
     auto mrc = setUpMrc();
-    vector<char> dummy;
-    mrc->upload("/cheshire.cat", dummy);
+    MemoryStorage dummy;
+    mrc->upload<AbstractStorage>("/cheshire.cat", dummy);
     auto fVec = mrc->ls("/");
 
     auto findFileInVec = [&](const auto &vec, string arg) {
@@ -106,8 +111,9 @@ TEST(ApiIntegrationTesting, TestCreateFile) {
 
 TEST(ApiIntegrationTesting, TestCreateNonEmptyFile) {
     auto mrc = setUpMrc();
-    vector<char> vpar({'H', 'e', 'r', 'e', '\n'});
-    mrc->upload("/virtual_particle.txt", vpar);
+    MemoryStorage vpar;
+    vpar.append("Here\n", 5);
+    mrc->upload<AbstractStorage>("/virtual_particle.txt", vpar);
     auto fVec = mrc->ls("/");
 
     auto findFileInVec = [&](const auto &vec, string arg) {
@@ -168,8 +174,8 @@ TEST(ApiIntegrationTesting, TestCreateNestedDir) {
 
 TEST(ApiIntegrationTesting, TestMoveFile) {
     auto mrc = setUpMrc();
-    vector<char> dummy;
-    mrc->upload("/dummyToMove.txt", dummy);
+    MemoryStorage dummy;
+    mrc->upload<AbstractStorage>("/dummyToMove.txt", dummy);
     // now move it
     mrc->rename("/dummyToMove.txt", "/movedDummy.txt");
 
@@ -189,8 +195,8 @@ TEST(ApiIntegrationTesting, TestMoveFile) {
 
 TEST(ApiIntegrationTesting, TestMoveFileIntoNestedDir) {
     auto mrc = setUpMrc();
-    vector<char> dummy;
-    mrc->upload("/dummyToMove.txt", dummy);
+    MemoryStorage dummy;
+    mrc->upload<AbstractStorage>("/dummyToMove.txt", dummy);
     // now move it
     mrc->rename("/dummyToMove.txt", "/Mail.Ru рекомендует/movedDummy.txt");
 
@@ -209,9 +215,10 @@ TEST(ApiIntegrationTesting, TestMoveFileIntoNestedDir) {
 
 TEST(ApiIntegrationTesting, TestFileDownload) {
     auto mrc = setUpMrc();
-    auto content = mrc->download("/Берег.jpg");
+    MemoryStorage content;
+    mrc->download<AbstractStorage>("/Берег.jpg", content);
 
     EXPECT_EQ(content.size(), 723662); // Cloud default file
-    auto magicBytes = string(content.data(), 4);
+    auto magicBytes = string(content.readFully(), 4);
     EXPECT_EQ(magicBytes, "\xFF\xD8\xFF\xE1"); // JPEG magic bytes ver. 3, see wiki
 }

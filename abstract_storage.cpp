@@ -18,4 +18,14 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "blocking_queue.h"
+#include "abstract_storage.h"
+
+AbstractStorage::AbstractStorage()
+{
+
+}
+
+AbstractStorage::~AbstractStorage()
+{
+
+}
