@@ -188,6 +188,15 @@ bool MarcRestClient::login(const Account &acc)
     return true;
 }
 
+void MarcRestClient::create(string remotePath)
+{
+    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
+
+    // add zero file, special hash
+    addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000;0");
+}
+
 void MarcRestClient::authenticate()
 {
     // Login={0}&Domain={1}&Password={2}
@@ -397,15 +406,14 @@ void MarcRestClient::upload(string remotePath, Container &body, size_t start, si
     static_assert(is_same<Container, vector<char>>::value ||
                   is_same<Container, AbstractStorage>::value, "Container should be of compatible container type");
 
-    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
-    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
-
-    // zero size upload requested, skip upload part completely
     if (body.empty()) {
-        // add zero file, special hash
-        addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000;0");
+        // zero size upload requested, skip upload part completely
+        create(remotePath);
         return;
     }
+
+    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});

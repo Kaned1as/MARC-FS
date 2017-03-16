@@ -51,6 +51,20 @@ extern template void MruData::create<MarcFileNode>(string);
 
 /**
  * @brief handleCompounds - collapse compounds into regular files with greater size
+ *
+ * Handling compounds is an important feature of this OS. If a file to be uploaded Mail.ru Cloud
+ * is bigger than 2GB (which cloud don't support), then it's split to parts 1, 2, 3 etc.
+ * all 2GB long.
+ *
+ * When such file is downloaded again, all these split files are joined back into one.
+ *
+ * Sample:
+ *  name.mkv 3GB long ---> cloud
+ *                      -> name.mkv.marcfs-part-1 2GB long
+ *                      -> name.mkv.marcfs-part-2 1GB long
+ *              local <---
+ *  name.mkv 3GB long <-
+ *
  * @param dirPath - path to containing dir
  * @param files - vector to mutate
  */
@@ -350,7 +364,9 @@ int truncateCallback(const char *path, off_t size)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    // just mark it created in cache
+    // just mark it created in cache, don't actually create it on cloud
+    // because if new file is > 2GB we would end up with zero-sized
+    // file along with parts in that case
     fsMetadata.create<MarcFileNode>(path);
     fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
 

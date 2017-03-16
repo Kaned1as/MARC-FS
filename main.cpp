@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
     acc.setPassword(conf.password);
     MarcRestClient rc;
     rc.login(acc); // authenticate one instance to populate pool
-    fsMetadata.clientPool.populate(rc, 5);
+    fsMetadata.clientPool.populate(rc, 25);
 
     // initialize cache dir
     if (conf.cachedir) {

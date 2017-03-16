@@ -112,7 +112,6 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
     }
 
     // cleanup
-    setMtime(time(nullptr));
     dirty = false;
     newlyCreated = false;
 }
@@ -125,8 +124,10 @@ int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes)
 int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
 {
     int res = cachedContent->write(buf, size, offsetBytes);
-    if (res > 0)
+    if (res > 0) {
         dirty = true;
+        setMtime(time(nullptr));
+    }
     return res;
 }
 
@@ -148,6 +149,7 @@ void MarcFileNode::remove(MarcRestClient *client, string path)
 void MarcFileNode::truncate(off_t size)
 {
     cachedContent->truncate(size);
+    setMtime(time(nullptr));
     dirty = true;
 }
 
@@ -159,6 +161,7 @@ void MarcFileNode::release()
         cachedContent->clear(); // forget contents of a node
         opened = false;
     }
+    // next thread is eligible to use this file
     openedCondition.notify_one();
 }
 

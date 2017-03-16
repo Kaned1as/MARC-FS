@@ -29,7 +29,7 @@
 
 #include "utils.h"
 
-#define MARCFS_MAX_FILE_SIZE (1L << 31) // 2 GB
+#define MARCFS_MAX_FILE_SIZE ((1L << 31) - (1L << 10)) // 2 GB except 1 KB for multipart boundaries etc.
 //#define MARCFS_MAX_FILE_SIZE (1L << 25) // 32 MiB - for tests
 #define MARCFS_SUFFIX ".marcfs-part-"
 
@@ -75,6 +75,11 @@ public:
      */
     template<typename Container>
     void upload(std::string remotePath, Container &body, size_t start = 0, size_t count = SIZE_MAX);
+
+    /**
+     * @brief create - create empty file at path
+     */
+    void create(std::string remotePath);
 
     /**
      * @brief mkdir creates a directory noted by remotePath
