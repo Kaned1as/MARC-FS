@@ -1,4 +1,7 @@
-  MARC-FS
+[![Gitter](https://img.shields.io/gitter/room/MARC-FS/MARC-FS.svg)](https://gitter.im/MARC-FS/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![build status](https://gitlab.com/Kanedias/MARC-FS/badges/master/build.svg)](https://gitlab.com/Kanedias/MARC-FS/commits/master)
+
+MARC-FS
 ===========
 Mail.ru Cloud filesystem written for FUSE
 
