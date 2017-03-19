@@ -95,6 +95,9 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->remove(extendedPathname);
         }
+    } else if (!newlyCreated) {
+        // old one was regular non-compound one, delete it
+        client->remove(path);
     }
 
     if (cachedContent->size() > MARCFS_MAX_FILE_SIZE) {
