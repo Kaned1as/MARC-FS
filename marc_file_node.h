@@ -44,6 +44,7 @@ public:
     int read(char *buf, size_t size, uint64_t offsetBytes);
     int write(const char *buf, size_t size, uint64_t offsetBytes);
     void remove(MarcRestClient *client, std::string path);
+    void rename(MarcRestClient *client, std::string oldPath, std::string newPath) override;
     void truncate(off_t size);
     void release();
 

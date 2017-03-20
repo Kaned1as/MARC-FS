@@ -29,3 +29,9 @@ bool MarcDummyNode::exists() const
 {
     return false;
 }
+
+void MarcDummyNode::rename(MarcRestClient *client, std::string oldPath, std::string newPath)
+{
+    // we can't rename non-existing node, this file does not exist!
+    throw std::invalid_argument("Tried to move non-existing file!");
+}

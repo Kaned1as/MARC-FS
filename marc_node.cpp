@@ -20,8 +20,11 @@
 
 #include <fuse.h>
 
+#include "marc_api.h"
 #include "marc_node.h"
 #include "utils.h"
+
+using namespace std;
 
 MarcNode::MarcNode()
 {
@@ -56,4 +59,10 @@ void MarcNode::fillStats(struct stat *stbuf) const
 #else
     stbuf->st_mtimespec.tv_sec = mtime;
 #endif
+}
+
+void MarcNode::rename(MarcRestClient *client, string oldPath, string newPath)
+{
+    // default implementation
+    client->rename(oldPath, newPath);
 }

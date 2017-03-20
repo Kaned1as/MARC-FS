@@ -322,6 +322,9 @@ int rmdirCallback(const char *path)
     API_CALL_TRY_FINISH
 }
 
+/**
+ * Unlink is only for files, directories get @ref rmdir instead
+ */
 int unlinkCallback(const char *path)
 {
     // IMPORTANT!
@@ -346,9 +349,14 @@ int unlinkCallback(const char *path)
 int renameCallback(const char *oldPath, const char *newPath)
 {
     API_CALL_TRY_BEGIN
+    auto node = fsMetadata.getNode<MarcNode>(oldPath);
+    if (!node || !node->exists()) {
+        return -ENOENT;
+    }
+
     // if we write new file and try to rename it while flushing to cloud
     // it will fail here with -EIO as actual addition happens only after file is uploaded
-    client->rename(oldPath, newPath);
+    node->rename(client.get(), oldPath, newPath);
     fsMetadata.renameCache(oldPath, newPath);
     API_CALL_TRY_FINISH
 

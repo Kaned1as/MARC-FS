@@ -117,6 +117,9 @@ void MruData::renameCache(string oldPath, string newPath)
     lock_guard<mutex> lock(cacheLock);
     cache[newPath].swap(cache[oldPath]);
     cache[oldPath].reset(new MarcDummyNode);
+
+    // if we moved a dir, we should also move all of its contents
+    // fuse will do it for us, moving files in a dir one-by-one
 }
 
 bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)

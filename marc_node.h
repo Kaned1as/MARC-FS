@@ -25,6 +25,8 @@
 
 #include "marc_api_cloudfile.h"
 
+class MarcRestClient;
+
 /**
  * @brief The MarcNode class - base cache node for any filesystem entry
  */
@@ -44,6 +46,12 @@ public:
      * @param stbuf - struct stat
      */
     virtual void fillStats(struct stat *stbuf) const;
+
+    /**
+     * @brief rename - rename file from old path to new. This operation
+     *        may not be atomic for some file types.
+     */
+    virtual void rename(MarcRestClient *client, std::string oldPath, std::string newPath);
 
     std::mutex& getMutex();
 

@@ -34,6 +34,7 @@ public:
     MarcDummyNode();
 
     bool exists() const override;
+    void rename(MarcRestClient *client, std::string oldPath, std::string newPath) override;
 };
 
 #endif // MARC_DUMMY_NODE_H

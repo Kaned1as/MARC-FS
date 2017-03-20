@@ -149,6 +149,23 @@ void MarcFileNode::remove(MarcRestClient *client, string path)
     }
 }
 
+void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath)
+{
+    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+        // compound file, move each part
+        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (size_t idx = 0; idx < partCount; ++idx) {
+            string oldExtPathname = string(oldPath) + MARCFS_SUFFIX + to_string(idx);
+            string newExtPathname = string(newPath) + MARCFS_SUFFIX + to_string(idx);
+            client->rename(oldExtPathname, newExtPathname);
+        }
+
+    } else {
+        // single file, common approach
+        MarcNode::rename(client, oldPath, newPath);
+    }
+}
+
 void MarcFileNode::truncate(off_t size)
 {
     cachedContent->truncate(size);
