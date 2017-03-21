@@ -23,7 +23,7 @@
 
 #include <fuse.h>
 
-#include <map>
+#include <shared_mutex>
 #include <vector>
 
 #include "object_pool.h"
@@ -117,7 +117,7 @@ private:
     /**
      * @brief cacheLock - lock for changing cache structure
      */
-    std::mutex cacheLock;
+    std::shared_timed_mutex cacheLock;
 };
 
 #endif // MRU_METADATA_H

@@ -328,7 +328,7 @@ int rmdirCallback(const char *path)
 int unlinkCallback(const char *path)
 {
     // IMPORTANT!
-    // if a file is in rw-lock (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
+    // if a file is opened (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
     // calls QUEUE PATH on this node and waits till the file is released
     // then calls DEQUEUE PATH on this node and calls:
     // 1.      rename file -> .fuse_hidden{...}
@@ -337,21 +337,25 @@ int unlinkCallback(const char *path)
     // 3.      unlink file .fuse_hidden{...}
 
     API_CALL_TRY_BEGIN
-    {
-        auto file = fsMetadata.getNode<MarcFileNode>(path);
-        file->remove(client.get(), path);
-        // -- unlock cache mutex --
-    }
+    auto file = fsMetadata.getNode<MarcFileNode>(path);
+    file->remove(client.get(), path);
     return fsMetadata.purgeCache(path);
     API_CALL_TRY_FINISH
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
 {
-    API_CALL_TRY_BEGIN
     auto node = fsMetadata.getNode<MarcNode>(oldPath);
     if (!node || !node->exists()) {
         return -ENOENT;
+    }
+
+    API_CALL_TRY_BEGIN
+    auto target = fsMetadata.getNode<MarcNode>(newPath);
+    auto targetFile = dynamic_cast<MarcFileNode*>(target);
+    if (targetFile) {
+        // we have file here, remove it
+        targetFile->remove(client.get(), newPath);
     }
 
     // if we write new file and try to rename it while flushing to cloud

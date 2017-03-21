@@ -159,7 +159,6 @@ void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath
             string newExtPathname = string(newPath) + MARCFS_SUFFIX + to_string(idx);
             client->rename(oldExtPathname, newExtPathname);
         }
-
     } else {
         // single file, common approach
         MarcNode::rename(client, oldPath, newPath);

@@ -30,7 +30,7 @@ using namespace std;
 
 template<typename T>
 T* MruData::getNode(string path) {
-    lock_guard<mutex> lock(cacheLock);
+    shared_lock<shared_timed_mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
         T *node = dynamic_cast<T*>(it->second.get());
@@ -51,7 +51,7 @@ template MarcDummyNode* MruData::getNode(string path);
 
 template<typename T>
 void MruData::create(string path) {
-    lock_guard<mutex> lock(cacheLock);
+    lock_guard<shared_timed_mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
         throw invalid_argument("Cache already contains node at path " + path);
@@ -65,7 +65,7 @@ template void MruData::create<MarcDirNode>(string path);
 template void MruData::create<MarcDummyNode>(string path);
 
 void MruData::putCacheStat(string path, const CloudFile *cf) {
-    lock_guard<mutex> lock(cacheLock);
+    lock_guard<shared_timed_mutex> lock(cacheLock);
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
@@ -95,7 +95,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 }
 
 int MruData::purgeCache(string path) {
-    lock_guard<mutex> lock(cacheLock);
+    lock_guard<shared_timed_mutex> lock(cacheLock);
     auto it = cache.find(path);
 
     // node doesn't exist
@@ -114,19 +114,18 @@ int MruData::purgeCache(string path) {
 
 void MruData::renameCache(string oldPath, string newPath)
 {
-    lock_guard<mutex> lock(cacheLock);
+    lock_guard<shared_timed_mutex> lock(cacheLock);
     cache[newPath].swap(cache[oldPath]);
     cache[oldPath].reset(new MarcDummyNode);
 
-    // if we moved a dir, we should also move all of its contents
-    // fuse will do it for us, moving files in a dir one-by-one
+    // FIXME: moving dirs moves all their content with them!
 }
 
 bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
 {
-    // we store cache in map, this means we can find dir contents
+    // we store cache in sorted map, this means we can find dir contents
     // by finding itself and promoting iterator further
-    lock_guard<mutex> lock(cacheLock);
+    shared_lock<shared_timed_mutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it == cache.end())
         return false; // not found in cache
@@ -139,20 +138,21 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
     if (!dir->isCached())
         return false;
 
+    // root dir is special, e.g.
+    // "/folder" -> "folder", "/folder/f2" -> "f2"
+    bool isRoot = path == "/";
+    string nestedPath = isRoot ? path : path + '/';
+
     // move iterator further as first step, we don't need
     // the directory itself in listing
     for (++it; it != cache.end(); ++it) {
-        if (it->first.find(path) != 0) // we are moved to other entries, break
+        if (it->first.find(nestedPath) != 0) // we are moved to other entries, break
             break;
 
         if (!it->second->exists())
             continue; // skip negative nodes
 
-        // root dir is special
-        // "/folder" -> "folder", "/folder/f2" -> "f2"
-        auto outerSize = path == "/" ? path.size() : path.size() + 1;
-
-        string innerPath = it->first.substr(outerSize);
+        string innerPath = it->first.substr(nestedPath.size());
         if (innerPath.find('/') != string::npos)
             continue; // skip nested directories
 
