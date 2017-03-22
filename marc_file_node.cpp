@@ -54,8 +54,14 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
 
 void MarcFileNode::open(MarcRestClient *client, string path)
 {
-    unique_lock<mutex> guard(openMutex);
-    openedCondition.wait(guard, [this]{ return !opened; });
+    // open is potentially network-download operation, lock it
+    unique_lock<mutex> guard(netMutex);
+
+    if (opened) {
+        // already opened by some other thread/process,
+        // no need to download or init
+        return;
+    }
 
     // initialize storage
     cachedContent->open();
@@ -83,6 +89,9 @@ void MarcFileNode::open(MarcRestClient *client, string path)
 
 void MarcFileNode::flush(MarcRestClient *client, string path)
 {
+    // open is potentially network-upload operation, lock it
+    unique_lock<mutex> guard(netMutex);
+
     // skip unchanged files
     if (!dirty && !newlyCreated)
         return;
@@ -95,7 +104,7 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->remove(extendedPathname);
         }
-    } else if (!newlyCreated) {
+    } else {
         // old one was regular non-compound one, delete it
         client->remove(path);
     }
@@ -174,24 +183,11 @@ void MarcFileNode::truncate(off_t size)
 
 void MarcFileNode::release()
 {
-    {
-        unique_lock<mutex> guard(openMutex);
-        fileSize = cachedContent->size(); // set cached size to last content size before clearing
-        cachedContent->clear(); // forget contents of a node
-        opened = false;
-    }
-    // next thread is eligible to use this file
-    openedCondition.notify_one();
-}
-
-bool MarcFileNode::isDirty() const
-{
-    return dirty;
-}
-
-void MarcFileNode::setDirty(bool value)
-{
-    dirty = value;
+    // this is called after all threads released the file
+    unique_lock<mutex> guard(netMutex);
+    fileSize = cachedContent->size(); // set cached size to last content size before clearing
+    cachedContent->clear(); // forget contents of a node
+    opened = false;
 }
 
 void MarcFileNode::setSize(size_t size)
@@ -210,11 +206,6 @@ size_t MarcFileNode::getSize() const
         return cachedContent->size();
 
     return fileSize;
-}
-
-bool MarcFileNode::isNewlyCreated() const
-{
-    return newlyCreated;
 }
 
 void MarcFileNode::setNewlyCreated(bool value)

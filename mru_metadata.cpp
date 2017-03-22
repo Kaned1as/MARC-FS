@@ -105,6 +105,8 @@ int MruData::purgeCache(string path) {
     MarcFileNode* node = dynamic_cast<MarcFileNode*>(it->second.get());
     if (node && node->isOpen()) {
         // we can't delete a file if it's open, should wait when it's closed
+        // this should actually never happen
+        // fuse will handle this situation before us (hiding file)
         return -EINPROGRESS;
     }
 

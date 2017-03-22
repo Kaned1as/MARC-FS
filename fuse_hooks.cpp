@@ -376,11 +376,11 @@ int truncateCallback(const char *path, off_t size)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    // just mark it created in cache, don't actually create it on cloud
-    // because if new file is > 2GB we would end up with zero-sized
-    // file along with parts in that case
+    API_CALL_TRY_BEGIN
+    client->create(path);
     fsMetadata.create<MarcFileNode>(path);
     fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
+    API_CALL_TRY_FINISH
 
     return 0;
 }

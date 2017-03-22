@@ -23,7 +23,6 @@
 
 #include <vector>
 #include <memory>
-#include <condition_variable>
 
 #include "marc_node.h"
 #include "abstract_storage.h"
@@ -48,39 +47,46 @@ public:
     void truncate(off_t size);
     void release();
 
-    bool isDirty() const;
-    void setDirty(bool value);
-
     void setSize(size_t fileSize);
 
     AbstractStorage& getCachedContent();
 
-    bool isNewlyCreated() const;
     void setNewlyCreated(bool value);
 
     bool isOpen() const;
 
 private:
     size_t getSize() const;
+
     /**
      * @brief cachedContent - backing storage for open-write/read-release sequence
      */
     std::unique_ptr<AbstractStorage> cachedContent;
+
     /**
      * @brief dirty - used to indicate whether subsequent upload is needed
      */
     bool dirty = false;
+
+    /**
+     * @brief newlyCreated - indicates that this file was just created
+     */
     bool newlyCreated = false;
+
     /**
      * @brief fileSize - holds size that was passed from cloud (or sum of compounds)
      */
     size_t fileSize = 0;
     /**
-     * @brief openMutex - mutex that guards opening the file. Only one thread
-     *        should work with the file keeping it open
+     * @brief netMutex - track actual network usage by this file.
+     *
+     * If many readers/writers will try to open this file concurrently,
+     * it may result in multiple download requests, certainly that's not what
+     * we want. Similarly, concurrent flush requests would cause multiple uploads.
+     *
+     * Lock this in case some do-once network operation is possible.
      */
-    std::mutex openMutex;
-    std::condition_variable openedCondition;
+    std::mutex netMutex;
     bool opened = false;
 };
 
