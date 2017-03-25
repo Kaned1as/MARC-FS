@@ -331,10 +331,10 @@ int unlinkCallback(const char *path)
     // if a file is opened (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
     // calls QUEUE PATH on this node and waits till the file is released
     // then calls DEQUEUE PATH on this node and calls:
-    // 1.      rename file -> .fuse_hidden{...}
-    //    e.g. rename /test/VTS_03_2.VOB -> /test/.fuse_hidden000063dd00000001
-    // 2.      release file .fuse_hidden{...}
-    // 3.      unlink file .fuse_hidden{...}
+    // 1.          rename file -> .fuse_hidden{...}
+    //    e.g.     rename /test/VTS_03_2.VOB -> /test/.fuse_hidden000063dd00000001
+    // 2. wait for release file .fuse_hidden{...}
+    // 3.          unlink file .fuse_hidden{...}
 
     API_CALL_TRY_BEGIN
     auto file = fsMetadata.getNode<MarcFileNode>(path);

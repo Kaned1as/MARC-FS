@@ -87,6 +87,13 @@ private:
      * Lock this in case some do-once network operation is possible.
      */
     std::mutex netMutex;
+
+    /**
+     * @brief opened - indicated whether the file is already open by
+     *                 you or some another thread
+     *
+     * Guarded by mutex @ref netMutex
+     */
     bool opened = false;
 };
 
