@@ -32,6 +32,14 @@
 
 class CloudFile;
 
+#ifdef __APPLE__
+typedef std::mutex rwMutex;
+typedef std::unique_lock<rwMutex> rwLock;
+#else
+typedef std::shared_timed_mutex rwMutex;
+typedef std::shared_lock<rwMutex> rwLock;
+#endif
+
 /**
  * @brief The MruData class - filesystem-wide metadata and caching for the mounted filesystem.
  *
@@ -117,7 +125,7 @@ private:
     /**
      * @brief cacheLock - lock for changing cache structure
      */
-    std::shared_timed_mutex cacheLock;
+    rwMutex cacheLock;
 };
 
 #endif // MRU_METADATA_H
