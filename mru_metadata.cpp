@@ -30,7 +30,7 @@ using namespace std;
 
 template<typename T>
 T* MruData::getNode(string path) {
-    shared_lock<shared_timed_mutex> lock(cacheLock);
+    rwLock lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
         T *node = dynamic_cast<T*>(it->second.get());
@@ -51,7 +51,7 @@ template MarcDummyNode* MruData::getNode(string path);
 
 template<typename T>
 void MruData::create(string path) {
-    lock_guard<shared_timed_mutex> lock(cacheLock);
+    lock_guard<rwMutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
         throw invalid_argument("Cache already contains node at path " + path);
@@ -65,7 +65,7 @@ template void MruData::create<MarcDirNode>(string path);
 template void MruData::create<MarcDummyNode>(string path);
 
 void MruData::putCacheStat(string path, const CloudFile *cf) {
-    lock_guard<shared_timed_mutex> lock(cacheLock);
+    lock_guard<rwMutex> lock(cacheLock);
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
@@ -95,7 +95,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 }
 
 int MruData::purgeCache(string path) {
-    lock_guard<shared_timed_mutex> lock(cacheLock);
+    lock_guard<rwMutex> lock(cacheLock);
     auto it = cache.find(path);
 
     // node doesn't exist
@@ -116,7 +116,7 @@ int MruData::purgeCache(string path) {
 
 void MruData::renameCache(string oldPath, string newPath)
 {
-    lock_guard<shared_timed_mutex> lock(cacheLock);
+    lock_guard<rwMutex> lock(cacheLock);
     cache[newPath].swap(cache[oldPath]);
     cache[oldPath].reset(new MarcDummyNode);
 
@@ -127,7 +127,7 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
 {
     // we store cache in sorted map, this means we can find dir contents
     // by finding itself and promoting iterator further
-    shared_lock<shared_timed_mutex> lock(cacheLock);
+    rwLock lock(cacheLock);
     auto it = cache.find(path);
     if (it == cache.end())
         return false; // not found in cache
