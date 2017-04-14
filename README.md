@@ -20,8 +20,8 @@ Features
 - multithreaded, you can work with multiple files at once
 - support for files > 2GB by seamless splitting/joining uploaded/downloaded files
 
-Installation
-------------
+Installation & Usage
+--------------------
 You should have cmake and g++ at hand.
 MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. Once you have all this, do as usual:
 
@@ -52,6 +52,16 @@ To unmount previously mounted share, make sure no one uses it and execute:
     $ # if you mounted encfs previously, first unmount it
     $ # fusermount -u /path/to/mount/folder/encrypted
     $ fusermount -u /path/to/mount/folder
+
+If you want to get a shared link to the file, you should create a file with special name, `*.marcfs-link`
+
+    $ # suppose we want to get a public link to file 'picture.png'
+    $ touch picture.png.marcfs-link
+    $ cat picture.png.marcfs-link
+    /path/to/file/pictire.png: https://cloud.mail.ru/public/LINK/ADDRESS
+
+Files with size > 2G will show up as series of shared links for each part. 
+After getting the link special file can be safely removed.
 
 Note about cache dir
 -------------------

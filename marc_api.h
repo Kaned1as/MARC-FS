@@ -33,6 +33,8 @@
 //#define MARCFS_MAX_FILE_SIZE (1L << 25) // 32 MiB - for tests
 #define MARCFS_SUFFIX ".marcfs-part-"
 
+extern const std::string SCLD_PUBLICLINK_ENDPOINT;
+
 /**
  * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru Cloud API.
  *
@@ -127,6 +129,13 @@ public:
      * @param newRemotePath full new path to file
      */
     void rename(std::string oldRemotePath, std::string newRemotePath);
+
+    /**
+     * @brief share - create a share-link for the existing node
+     * @param remotePath - path to the remote file
+     * @return url to shared file as a string
+     */
+    std::string share(std::string remotePath);
 private:
 
     // api helpers

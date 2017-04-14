@@ -48,6 +48,7 @@ public:
     void release();
 
     void setSize(size_t fileSize);
+    size_t getSize() const;
 
     AbstractStorage& getCachedContent();
 
@@ -56,8 +57,6 @@ public:
     bool isOpen() const;
 
 private:
-    size_t getSize() const;
-
     /**
      * @brief cachedContent - backing storage for open-write/read-release sequence
      */

@@ -69,7 +69,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
-        return; // may happen if getattr for absolute path happens, then readdir of parent folder
+        return; // may happen in getattr
 
     if (!cf) {
         // mark non-existing
