@@ -39,6 +39,8 @@ int createCallback(const char *path, mode_t mode, struct fuse_file_info *fi);
 int openCallback(const char *path, struct fuse_file_info *fi);
 int releaseCallback(const char *path, struct fuse_file_info *fi);
 
+int opendirCallback(const char *path, struct fuse_file_info *fi);
+
 /**
  * @note mknodCallback - invoked when file is absent when writing
  */

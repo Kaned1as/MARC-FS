@@ -435,3 +435,14 @@ int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 
     return 0;
 }
+
+
+int opendirCallback(const char *path, fuse_file_info *fi)
+{
+    string pathStr(path);
+    auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
+    if (!node) {
+        fsMetadata.create<MarcDirNode>(pathStr);
+    }
+    return 0;
+}

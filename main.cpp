@@ -173,6 +173,7 @@ int main(int argc, char *argv[])
     cloudfs_oper.read = &readCallback;
     cloudfs_oper.getattr = &getattrCallback;
     cloudfs_oper.readdir = &readdirCallback;
+    cloudfs_oper.opendir = &opendirCallback;
     cloudfs_oper.open = &openCallback;
     cloudfs_oper.release = &releaseCallback;
     cloudfs_oper.mkdir = &mkdirCallback;
