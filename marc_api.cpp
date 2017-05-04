@@ -214,7 +214,7 @@ void MarcRestClient::authenticate()
     performPost();
 
     if (cookieStore.get().empty()) // no cookies received, halt
-        throw MailApiException("Failed to authenticate in mail.ru domain!");
+        throw MailApiException("Failed to authenticate" + authAccount.login + "in mail.ru domain!");
 }
 
 void MarcRestClient::obtainCloudCookie()

@@ -22,12 +22,15 @@
 #include <cstddef> // offsetof macro
 #include <string.h>
 #include <unistd.h> // getuid
+#include <pwd.h>
+
+#include <json/json.h>
 
 #include "fuse_hooks.h"
 #include "account.h"
 #include "utils.h"
 
-#define MARC_FS_OPT(t, p, v) { t, offsetof(marcfs_config, p), v }
+#define MARC_FS_OPT(t, p, v) { t, offsetof(MarcfsConfig, p), v }
 #define MARC_FS_VERSION "0.1"
 
 using namespace std;
@@ -36,7 +39,7 @@ using namespace std;
 MruData fsMetadata;
 
 // config struct declaration for cmdline parsing
-struct marcfs_config {
+struct MarcfsConfig {
      char *username;
      char *password;
      char *cachedir;
@@ -48,7 +51,7 @@ enum {
     KEY_VERSION
 };
 
-static struct fuse_opt marcfs_opts[] = {
+static struct fuse_opt marcfsOpts[] = {
      MARC_FS_OPT("username=%s",   username, 0),
      MARC_FS_OPT("password=%s",   password, 0),
      MARC_FS_OPT("cachedir=%s",   cachedir, 0),
@@ -86,13 +89,42 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
     return 1;
 }
 
+static void loadConfigFile(MarcfsConfig *conf) {
+    using namespace Json;
+
+    Value config;
+    Reader reader;
+    string homedir = getpwuid(getuid())->pw_dir;
+    ifstream configFile(homedir + "/.config/marcfs/config.json", std::ifstream::in | std::ifstream::binary);
+    ScopeGuard streamClose = [&] { configFile.close(); };
+
+    if (configFile.fail())
+        return; // no config file
+
+    bool ok = reader.parse(configFile, config, false);
+    if (!ok) {
+        cerr << "Invalid json in config file, ignoring...";
+        return;
+    }
+
+    // we can convert it to offsetof+substitution macros in case option count exceeds imagination
+    if (config["username"] != Value())
+        conf->username = strdup(config["username"].asCString());
+
+    if (config["password"] != Value())
+        conf->password = strdup(config["password"].asCString());
+
+    if (config["cachedir"] != Value())
+        conf->cachedir = strdup(config["cachedir"].asCString());
+}
+
 /**
- * @brief hide_sensitive_data - the part that actually changes all characters
+ * @brief hideSensitiveData - the part that actually changes all characters
  *        after equal sign into asterisks
  * @param param - parameter, like username=alice
  * @param rest - length of parameter
  */
-static void hide_sensitive_data(char *param, size_t rest) {
+static void hideSensitiveData(char *param, size_t rest) {
     char *data = strchr(param, '=');
     size_t len;
     if (data && (len = strlen(++data) - rest)) {
@@ -103,20 +135,20 @@ static void hide_sensitive_data(char *param, size_t rest) {
 }
 
 /**
- * @brief hide_sensitive - routine to check for credential mapping in arguments
+ * @brief hideSensitive - routine to check for credential mapping in arguments
  *        and change any sensitive data found into asterisks.
  * @param argc - argument count, pass directly from main
  * @param argv - argument array, pass directly from main
  */
-static void hide_sensitive(int argc, char *argv[]) {
+static void hideSensitive(int argc, char *argv[]) {
     for (int i = 1; i < argc; ++i) {
         char *user = strstr(argv[i], "username=");
         char *pasw = strstr(argv[i], "password=");
         if (user) {
-            hide_sensitive_data(user, (pasw && pasw > user) ? (strlen(pasw) + 1) : 0);
+            hideSensitiveData(user, (pasw && pasw > user) ? (strlen(pasw) + 1) : 0);
         }
         if (pasw) {
-            hide_sensitive_data(pasw, (user && user > pasw) ? (strlen(user) + 1) : 0);
+            hideSensitiveData(pasw, (user && user > pasw) ? (strlen(user) + 1) : 0);
         }
     }
 }
@@ -136,14 +168,17 @@ int main(int argc, char *argv[])
 
     // parse options
     fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    marcfs_config conf = {};
-    int res = fuse_opt_parse(&args, &conf, marcfs_opts, marcfs_opt_proc);
+    MarcfsConfig conf = {};
+    int res = fuse_opt_parse(&args, &conf, marcfsOpts, marcfs_opt_proc);
     if (res == -1) {
         return 2;
     }
 
+    // load config from file
+    loadConfigFile(&conf);
+
     // hide credentials from htop/top/ps output
-    hide_sensitive(argc, argv);
+    hideSensitive(argc, argv);
 
     // initialize auth and connections
     Account acc;

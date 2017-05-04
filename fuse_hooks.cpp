@@ -100,6 +100,14 @@ void handleCompounds(vector<CloudFile> &files) {
 
 /**
  * @brief handleLinks - populate link files with content they need
+ *
+ * "Link files" is kind of special file needed for Mail.ru Cloud interaction.
+ * In cloud, owner can share a file by obtaining public link to it and sending it
+ * to whoever he wants. To support this feature on the filesystem level user
+ * should create special file with same name as file to be shared but with
+ * ".marcfs-link" ending appended. The read operation for such  file will
+ * return the shared link url to that file.
+ *
  * @param filePath - path to the link file
  * @param file - cached link file node
  */

@@ -63,8 +63,23 @@ If you want to get a shared link to the file, you should create a file with spec
 Files with size > 2G will show up as series of shared links for each part. 
 After getting the link special file can be safely removed.
 
-Note about cache dir
--------------------
+Notes
+-----
+
+#### External configuration ####
+
+If you don't want to type credentials on the command line you can use config file for that.
+The file is `~/.config/marcfs/config.json` (default [XDG basedir spec](https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)). Example config:
+
+```json
+{
+    "username": "user@mail.ru",
+    "password": "password",
+    "cachedir": "/absolute/path"
+}
+```
+
+#### Cache dir ####
 
 MARC-FS has two modes of operation. If no cachedir option is given, it stores all intermediate download/upload 
 data directly in memory. If you copy large files as HD movies or ISO files, it may eat up your RAM pretty quickly,
