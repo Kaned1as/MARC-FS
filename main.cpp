@@ -43,6 +43,7 @@ struct MarcfsConfig {
      char *username;
      char *password;
      char *cachedir;
+     char *conffile;
 };
 
 // non-value options
@@ -55,6 +56,7 @@ static struct fuse_opt marcfsOpts[] = {
      MARC_FS_OPT("username=%s",   username, 0),
      MARC_FS_OPT("password=%s",   password, 0),
      MARC_FS_OPT("cachedir=%s",   cachedir, 0),
+     MARC_FS_OPT("conffile=%s",   conffile, 0),
 
      FUSE_OPT_KEY("-V",         KEY_VERSION),
      FUSE_OPT_KEY("--version",  KEY_VERSION),
@@ -80,6 +82,7 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
             "    -o username=STRING - username for your mail.ru mailbox\n"
             "    -o password=STRING - password for the above\n"
             "    -o cachedir=STRING - cache dir for not storing everything in RAM\n"
+            "    -o conffile=STRING - json config file location with other params\n"
             , outargs->argv[0]);
             exit(1);
         case KEY_VERSION:
@@ -91,12 +94,19 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
 
 static void loadConfigFile(MarcfsConfig *conf) {
     using namespace Json;
+    using namespace std;
 
     Value config;
     Reader reader;
-    string homedir = getpwuid(getuid())->pw_dir;
-    ifstream configFile(homedir + "/.config/marcfs/config.json", std::ifstream::in | std::ifstream::binary);
-    ScopeGuard streamClose = [&] { configFile.close(); };
+    ifstream configFile;
+    if (conf->conffile) {
+        // config file location is set, try to load data from there
+        configFile.open(conf->conffile, ifstream::in | ifstream::binary);
+    } else {
+        // try default location
+        string homedir = getpwuid(getuid())->pw_dir;
+        configFile.open(homedir + "/.config/marcfs/config.json", ifstream::in | ifstream::binary);
+    }
 
     if (configFile.fail())
         return; // no config file

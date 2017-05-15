@@ -69,7 +69,8 @@ Notes
 #### External configuration ####
 
 If you don't want to type credentials on the command line you can use config file for that.
-The file is `~/.config/marcfs/config.json` (default [XDG basedir spec](https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)). Example config:
+The file is `~/.config/marcfs/config.json` (default [XDG basedir spec](https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)).
+You can override its' location via `-o conffile=/path/to/config` option. Example config:
 
 ```json
 {
