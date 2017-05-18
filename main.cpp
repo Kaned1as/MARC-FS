@@ -44,6 +44,7 @@ struct MarcfsConfig {
      char *password;
      char *cachedir;
      char *conffile;
+     char *proxyurl;
 };
 
 // non-value options
@@ -57,6 +58,7 @@ static struct fuse_opt marcfsOpts[] = {
      MARC_FS_OPT("password=%s",   password, 0),
      MARC_FS_OPT("cachedir=%s",   cachedir, 0),
      MARC_FS_OPT("conffile=%s",   conffile, 0),
+     MARC_FS_OPT("proxyurl=%s",   proxyurl, 0),
 
      FUSE_OPT_KEY("-V",         KEY_VERSION),
      FUSE_OPT_KEY("--version",  KEY_VERSION),
@@ -83,6 +85,7 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
             "    -o password=STRING - password for the above\n"
             "    -o cachedir=STRING - cache dir for not storing everything in RAM\n"
             "    -o conffile=STRING - json config file location with other params\n"
+            "    -o proxyurl=STRING - proxy URL to use for making HTTP calls\n"
             , outargs->argv[0]);
             exit(1);
         case KEY_VERSION:
@@ -118,14 +121,17 @@ static void loadConfigFile(MarcfsConfig *conf) {
     }
 
     // we can convert it to offsetof+substitution macros in case option count exceeds imagination
-    if (config["username"] != Value())
+    if (!conf->username && config["username"] != Value())
         conf->username = strdup(config["username"].asCString());
 
-    if (config["password"] != Value())
+    if (!conf->password && config["password"] != Value())
         conf->password = strdup(config["password"].asCString());
 
-    if (config["cachedir"] != Value())
+    if (!conf->cachedir && config["cachedir"] != Value())
         conf->cachedir = strdup(config["cachedir"].asCString());
+
+    if (!conf->proxyurl && config["proxyurl"] != Value())
+        conf->proxyurl = strdup(config["proxyurl"].asCString());
 }
 
 /**
@@ -180,9 +186,8 @@ int main(int argc, char *argv[])
     fuse_args args = FUSE_ARGS_INIT(argc, argv);
     MarcfsConfig conf = {};
     int res = fuse_opt_parse(&args, &conf, marcfsOpts, marcfs_opt_proc);
-    if (res == -1) {
+    if (res == -1)
         return 2;
-    }
 
     // load config from file
     loadConfigFile(&conf);
@@ -195,6 +200,9 @@ int main(int argc, char *argv[])
     acc.setLogin(conf.username);
     acc.setPassword(conf.password);
     MarcRestClient rc;
+    if(conf.proxyurl)
+        rc.setProxy(conf.proxyurl);
+
     rc.login(acc); // authenticate one instance to populate pool
     fsMetadata.clientPool.populate(rc, 25);
 

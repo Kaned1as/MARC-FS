@@ -70,6 +70,7 @@ MarcRestClient::MarcRestClient()
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
       cookieStore(*restClient),        // cokie_store is not copyable, init in body
+      proxyUrl(toCopy.proxyUrl),        // copy proxy URL
       authAccount(toCopy.authAccount), // copy account from other one
       authToken(toCopy.authToken) // copy auth token from other one
 
@@ -78,6 +79,11 @@ MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
         restClient->add<CURLOPT_COOKIELIST>(c.data());
     }
     cookieStore.set_file(""); // init cookie engine
+}
+
+void MarcRestClient::setProxy(string proxyUrl)
+{
+    this->proxyUrl = proxyUrl;
 }
 
 string MarcRestClient::paramString(Params const &params)
@@ -113,6 +119,8 @@ string MarcRestClient::performPost()
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
+    if (!proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
@@ -143,6 +151,8 @@ void MarcRestClient::performGet(Container &target)
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
+    if (!proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);

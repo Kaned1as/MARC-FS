@@ -65,6 +65,12 @@ public:
     MarcRestClient(MarcRestClient &toCopy);
 
     /**
+     * @brief setProxy - set proxy URL to use. Syntax is same as in libcurl API.
+     * @param proxyUrl - string representing proxy URL (better with scheme). Should not be empty.
+     */
+    void setProxy(std::string proxyUrl);
+
+    /**
      * @brief API::login Sends auth info and initializes this API object on successful login.
      * @param acc account to auth with
      * @return true if authenticated successfully, false otherwise.
@@ -210,6 +216,7 @@ private:
     std::unique_ptr<curl::curl_easy> restClient;
     curl::curl_cookie cookieStore;
 
+    std::string proxyUrl;
     Account authAccount;
     std::string authToken;
 
