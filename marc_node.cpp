@@ -36,11 +36,6 @@ MarcNode::~MarcNode()
 
 }
 
-void MarcNode::setMtime(time_t time)
-{
-    this->mtime = time;
-}
-
 bool MarcNode::exists() const
 {
     return true;
@@ -54,11 +49,6 @@ void MarcNode::fillStats(struct stat *stbuf) const
     auto ctx = fuse_get_context();
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
     stbuf->st_gid = ctx->gid;
-#ifndef __APPLE__
-    stbuf->st_mtim.tv_sec = mtime;
-#else
-    stbuf->st_mtimespec.tv_sec = mtime;
-#endif
 }
 
 void MarcNode::rename(MarcRestClient *client, string oldPath, string newPath)

@@ -113,31 +113,34 @@ void handleCompounds(vector<CloudFile> &files) {
  */
 int handleLinks(string filePath, MarcFileNode* file) {
     smatch match;
-    if (regex_match(filePath, match, SHARE_LINK_REGEX)) {
-        string origPath = match[1];
-        string linkType = match[3];
-
-        auto origFile = fsMetadata.getNode<MarcFileNode>(origPath);
-        string link;
-        if (origFile->getSize() > MARCFS_MAX_FILE_SIZE) {
-            // it's compound, retrieve links for each part
-            size_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
-            API_CALL_TRY_BEGIN
-            for (size_t idx = 0; idx < partCount; ++idx) {
-                string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
-                link += extendedPath + ": ";
-                link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
-            }
-            API_CALL_TRY_FINISH
-        } else {
-            // single file, single link
-            API_CALL_TRY_BEGIN
-            link += origPath + ": ";
-            link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(origPath) + '\n';
-            API_CALL_TRY_FINISH
-        }
-        file->write(link.data(), link.size(), 0);
+    if (!regex_match(filePath, match, SHARE_LINK_REGEX)) {
+        return 0;
     }
+
+    string origPath = match[1];
+    // string linkType = match[3];
+
+    auto origFile = fsMetadata.getNode<MarcFileNode>(origPath);
+    string link;
+    if (origFile->getSize() > MARCFS_MAX_FILE_SIZE) {
+        // it's compound, retrieve links for each part
+        size_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
+        API_CALL_TRY_BEGIN
+        for (size_t idx = 0; idx < partCount; ++idx) {
+            string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
+            link += extendedPath + ": ";
+            link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
+        }
+        API_CALL_TRY_FINISH
+    } else {
+        // single file, single link
+        API_CALL_TRY_BEGIN
+        link += origPath + ": ";
+        link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(origPath) + '\n';
+        API_CALL_TRY_FINISH
+    }
+    file->truncate(0);
+    file->write(link.data(), link.size(), 0);
 
     return 0;
 }
@@ -214,13 +217,6 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
     // put all retrieved files in cache
     for (CloudFile &file : contents) {
-
-        // additional logic for link files - they are special but not empty
-        // the actual data will appear in them when they are read, see handleLinks func
-        if (regex_match(file.getName(), SHARE_LINK_REGEX)) {
-            file.setSize(1 << 15); // 32K, should be enough even for 1TB file
-        }
-
         fsMetadata.putCacheStat(dirname + file.getName(), &file);
         if (file.getName() == filename) {
             // file found - fill statbuf
@@ -324,11 +320,6 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
     auto offsetBytes = static_cast<uint64_t>(offset);
     auto file = fsMetadata.getNode<MarcFileNode>(path);
 
-    // handle possible link files
-    int res = handleLinks(path, file);
-    if (res)
-        return res;
-
     return file->read(buf, size, offsetBytes);
 }
 
@@ -343,6 +334,11 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 int flushCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     auto file = fsMetadata.getNode<MarcFileNode>(path); // present as we opened it earlier
+
+    // handle possible link files
+    int res = handleLinks(path, file);
+    if (res)
+        return res;
 
     API_CALL_TRY_BEGIN
     file->flush(client.get(), path);

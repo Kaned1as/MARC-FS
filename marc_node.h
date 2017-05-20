@@ -54,9 +54,6 @@ public:
     virtual void rename(MarcRestClient *client, std::string oldPath, std::string newPath);
 
     std::mutex& getMutex();
-
-private:
-    time_t mtime = 0;
 };
 
 #endif // MARC_NODE_H

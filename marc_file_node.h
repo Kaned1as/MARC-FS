@@ -48,6 +48,7 @@ public:
     void release();
 
     void setSize(size_t fileSize);
+    void setMtime(time_t time);
     size_t getSize() const;
 
     AbstractStorage& getCachedContent();
@@ -76,6 +77,14 @@ private:
      * @brief fileSize - holds size that was passed from cloud (or sum of compounds)
      */
     size_t fileSize = 0;
+
+    /**
+     * @brief mtime - modification time of this file.
+     *
+     * This entity belongs here as directories don't have mtime in Mail.ru Cloud API
+     * (and this is confirmed 'architecture feature')
+     */
+    time_t mtime = 0;
     /**
      * @brief netMutex - track actual network usage by this file.
      *

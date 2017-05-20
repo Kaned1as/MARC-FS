@@ -82,6 +82,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
         case CloudFile::File: {
             auto file = new MarcFileNode;
             file->setSize(cf->getSize());
+            file->setMtime(static_cast<time_t>(cf->getMtime()));
             node = file;
             break;
         }
@@ -90,7 +91,6 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
             break;
         }
     }
-    node->setMtime(static_cast<time_t>(cf->getMtime()));
     cache[path] = unique_ptr<MarcNode>(node);
 }
 

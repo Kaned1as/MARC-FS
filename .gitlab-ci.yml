@@ -1,19 +1,23 @@
 variables:
   GET_SOURCES_ATTEMPTS: "3"
+  GIT_SUBMODULE_STRATEGY: "recursive"
 
 stages:
-  - ubuntu
-  - mint
-  - fedora
-  - arch
+  - ubuntu build
+  - ubuntu fstest
+  - mint build
+  - mint fstest
+  - fedora build
+  - fedora fstest
+  - arch build
+  - arch fstest
 
-test on ubuntu:
+build on ubuntu:
   image: ubuntu
-  stage: ubuntu
+  stage: ubuntu build
   dependencies: []
-  before_script: &common_prepare_debian
+  before_script: &common_compile_debian
     - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
-    - git submodule update --init --recursive # update curlcpp and googletest
   script: &common_script
     - mkdir build
     - cd build
@@ -24,30 +28,79 @@ test on ubuntu:
     paths:
       - build/marcfs
 
-test on mint:
+fstest on ubuntu:
+  image: ubuntu
+  stage: ubuntu fstest
+  dependencies:
+    - ubuntu build
+  before_script: &common_test_debian
+    - apt-get update -qq && apt-get install -y -qq libfuse libcurl4-gnutls libjsoncpp
+    - useradd --create-home fstest
+    - cp build/marcfs tests/fstest.py ~fstest
+    - "chown -R fstest: ~fstest"
+  after_script: &common_fstest_after
+    - userdel fstest
+  script: &common_fstest_script
+    - su -c 'python fstest.py -v' - fstest
+
+
+build on mint:
   image: vcatechnology/linux-mint
-  stage: mint
+  stage: mint build
   dependencies: []
-  before_script: *common_prepare_debian
+  before_script: *common_compile_debian
   script: *common_script
   artifacts: *common_artifacts
-  
-test on fedora:
+
+fstest on mint:
+  image: vcatechnology/linux-mint
+  stage: mint fstest
+  dependencies:
+    - mint build
+  before_script: *common_test_debian
+  after_script: *common_fstest_after
+  script: *common_fstest_script
+
+build on fedora:
   image: fedora
-  stage: fedora
+  stage: fedora build
   dependencies: []
   before_script: 
     - yum -y install git-all cmake gcc-c++ fuse-devel libcurl-devel jsoncpp-devel
-    - git submodule update --init --recursive # update curlcpp and googletest
   script: *common_script
   artifacts: *common_artifacts
+
+fstest on fedora:
+  image: fedora
+  stage: fedora fstest
+  dependencies:
+    - fedora build
+  before_script:
+    - yum -y install fuse libcurl jsoncpp python
+    - useradd --create-home fstest
+    - cp build/marcfs tests/fstest.py ~fstest
+    - "chown -R fstest: ~fstest"
+  after_script: *common_fstest_after
+  script: *common_fstest_script
   
-test on arch:
+build on arch:
   image: pritunl/archlinux
-  stage: arch
+  stage: arch build
   dependencies: []
   before_script:
     - pacman -S --noconfirm git make cmake gcc fuse2 libcurl-gnutls jsoncpp
-    - git submodule update --init --recursive # update curlcpp and googletest
   script: *common_script
   artifacts: *common_artifacts
+
+fstest on arch:
+  image: pritunl/archlinux
+  stage: arch fstest
+  dependencies:
+    - arch build
+  before_script:
+    - pacman -S --noconfirm fuse2 libcurl-gnutls jsoncpp python
+    - useradd --create-home fstest
+    - cp build/marcfs tests/fstest.py ~fstest
+    - "chown -R fstest: ~fstest"
+  after_script: *common_fstest_after
+  script: *common_fstest_script

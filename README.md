@@ -77,6 +77,7 @@ You can override its' location via `-o conffile=/path/to/config` option. Example
     "username": "user@mail.ru",
     "password": "password",
     "cachedir": "/absolute/path"
+    "proxyurl": "http://localhost:3128"
 }
 ```
 

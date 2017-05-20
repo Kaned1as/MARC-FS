@@ -50,6 +50,11 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
     stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
     stbuf->st_nlink = 1;
     stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
+#ifndef __APPLE__
+    stbuf->st_mtim.tv_sec = mtime;
+#else
+    stbuf->st_mtimespec.tv_sec = mtime;
+#endif
 }
 
 void MarcFileNode::open(MarcRestClient *client, string path)
@@ -177,7 +182,9 @@ void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath
 void MarcFileNode::truncate(off_t size)
 {
     cachedContent->truncate(size);
-    setMtime(time(nullptr));
+    // truncate doesn't open file, set size accordingly
+    fileSize = static_cast<size_t>(size);
+    mtime = time(nullptr);
     dirty = true;
 }
 
@@ -193,6 +200,11 @@ void MarcFileNode::release()
 void MarcFileNode::setSize(size_t size)
 {
     this->fileSize = size;
+}
+
+void MarcFileNode::setMtime(time_t time)
+{
+    this->mtime = time;
 }
 
 AbstractStorage& MarcFileNode::getCachedContent()
