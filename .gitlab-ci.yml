@@ -87,20 +87,24 @@ fstest on fedora:
 
   
 build on arch:
-  image: pritunl/archlinux
+# image: pritunl/archlinux # GPG signing errors
+  image: base/archlinux
   stage: arch build
   dependencies: []
   before_script:
+    - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse2 libcurl-gnutls jsoncpp
   script: *common_script
   artifacts: *common_artifacts
 
 fstest on arch:
-  image: pritunl/archlinux
+# image: pritunl/archlinux
+  image: base/archlinux
   stage: arch fstest
   dependencies:
     - build on arch
   before_script:
+    - pacman -Syu --noconfirm
     - pacman -S --noconfirm fuse2 libcurl-gnutls jsoncpp python
     - useradd --create-home fstest
     - cp build/marcfs tests/fstest.py ~fstest
