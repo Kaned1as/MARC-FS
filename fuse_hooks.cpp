@@ -41,6 +41,9 @@
 const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 
+// global MruData instance definition
+MruData fsMetadata;
+
 using namespace std;
 
 // explicit instantiation declarations

@@ -35,8 +35,7 @@
 
 using namespace std;
 
-// global MruData instance definition
-MruData fsMetadata;
+extern MruData fsMetadata;
 
 // config struct declaration for cmdline parsing
 struct MarcfsConfig {

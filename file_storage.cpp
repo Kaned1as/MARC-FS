@@ -21,6 +21,7 @@
 #include <unistd.h> // not available on non-unix
 
 #include <string>
+#include <cstring>
 
 #include "file_storage.h"
 #include "mru_metadata.h"
@@ -117,7 +118,9 @@ void FileStorage::truncate(off_t size)
     // truncate is not cross-platform
     // TODO: check in C++17
     data.close();
-    ::truncate(filename.c_str(), size);
+    int res = ::truncate(filename.c_str(), size);
+    if (res) // should not happen
+        std::cerr << "Truncate failed: " << strerror(errno);
     // don't truncate this time
     data.open(filename, ios::out | ios::in | ios::binary);
 }
