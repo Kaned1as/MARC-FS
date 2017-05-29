@@ -25,7 +25,7 @@ MARC-FS - Mail.ru Cloud filesystem written for FUSE.
 
 
 %build
-%cmake
+%cmake -DBUILD_SHARED_LIBS:BOOL=OFF
 make %{?_smp_mflags}
 
 
