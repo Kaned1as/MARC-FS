@@ -1,14 +1,17 @@
-Name:		fuse-marcfs
-Version:	0.3
-Release:	1%{?dist}
-Summary:	FUSE filesystem for Mail.ru Cloud storage
+%define date 20170529
+%define rev  0461ea2
 
-License:	GPLv3+
-URL:		https://gitlab.com/Kanedias/MARC-FS
-Source0:	fuse-marcfs-%{version}.tar.bz2
+Name:       fuse-marcfs
+Version:    0.4
+Release:    1.%{date}git%{rev}%{?dist}
+Summary:    FUSE filesystem for Mail.ru Cloud storage
+
+License:    GPLv3+
+URL:        https://gitlab.com/Kanedias/MARC-FS
+Source0:    fuse-marcfs-%{version}.tar.bz2
 
 BuildRequires:  cmake
-BuildRequires:	gcc-c++
+BuildRequires:  gcc-c++
 BuildRequires:  fuse-devel
 BuildRequires:  libcurl-devel
 BuildRequires:  jemalloc-devel
@@ -31,9 +34,11 @@ make %{?_smp_mflags}
 
 
 %files
-%doc
-
+%doc AUTHORS.md LICENSE README.md
+%{_bindir}/marcfs
 
 
 %changelog
+* Mon May 29 2017 Yaroslav Sidlovsky <zawertun@gmail.com> - 0.4-1.20170529git0461ea2
+- first spec version
 
