@@ -20,8 +20,8 @@ Features
 - multithreaded, you can work with multiple files at once
 - support for files > 2GB by seamless splitting/joining uploaded/downloaded files
 
-Installation
-------------
+Installation & Usage
+--------------------
 You should have cmake and g++ at hand.
 MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. Once you have all this, do as usual:
 
@@ -53,8 +53,35 @@ To unmount previously mounted share, make sure no one uses it and execute:
     $ # fusermount -u /path/to/mount/folder/encrypted
     $ fusermount -u /path/to/mount/folder
 
-Note about cache dir
--------------------
+If you want to get a shared link to the file, you should create a file with special name, `*.marcfs-link`
+
+    $ # suppose we want to get a public link to file 'picture.png'
+    $ touch picture.png.marcfs-link
+    $ cat picture.png.marcfs-link
+    /path/to/file/pictire.png: https://cloud.mail.ru/public/LINK/ADDRESS
+
+Files with size > 2G will show up as series of shared links for each part. 
+After getting the link special file can be safely removed.
+
+Notes
+-----
+
+#### External configuration ####
+
+If you don't want to type credentials on the command line you can use config file for that.
+The file is `~/.config/marcfs/config.json` (default [XDG basedir spec](https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html)).
+You can override its' location via `-o conffile=/path/to/config` option. Example config:
+
+```json
+{
+    "username": "user@mail.ru",
+    "password": "password",
+    "cachedir": "/absolute/path"
+    "proxyurl": "http://localhost:3128"
+}
+```
+
+#### Cache dir ####
 
 MARC-FS has two modes of operation. If no cachedir option is given, it stores all intermediate download/upload 
 data directly in memory. If you copy large files as HD movies or ISO files, it may eat up your RAM pretty quickly,

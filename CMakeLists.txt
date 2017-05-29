@@ -19,11 +19,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 #                            #
 
 # Curl C++ bindings
-ADD_SUBDIRECTORY(contrib/curlcpp)
+ADD_SUBDIRECTORY(contrib/curlcpp EXCLUDE_FROM_ALL)
 INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
 
 # Googletest bindings
-ADD_SUBDIRECTORY(contrib/googletest/googletest)
+ADD_SUBDIRECTORY(contrib/googletest/googletest EXCLUDE_FROM_ALL)
 INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
 
 #                            #
@@ -57,9 +57,14 @@ else()
 endif()
 
 # first, run tests
-add_executable(apitest tests/apitest.cpp)
-add_library(marcfs_for_testing STATIC ${SRC_LIST})
-target_link_libraries(apitest gtest_main marcfs_for_testing curlcpp jsoncpp)
+set(SRC_NO_MAIN ${SRC_LIST})
+list(REMOVE_ITEM SRC_NO_MAIN ./main.cpp)
+add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
+target_link_libraries(apitest
+    gtest_main
+    curlcpp
+    ${JSONCPP_LIBRARIES}
+    ${FUSE_LIBRARIES})
 add_test(NAME rest_api_test COMMAND apitest)
 
 # final binary
@@ -75,3 +80,5 @@ target_link_libraries(marcfs
 if(JEMALLOC_FOUND)
     target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
 endif()
+
+install(TARGETS marcfs RUNTIME DESTINATION bin)

@@ -50,10 +50,13 @@ static const string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
 static const string SCLD_SPACE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/user/space";
 
 static const string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
+static const string SCLD_PUBLISHFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/publish";
 static const string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
 static const string SCLD_RENAMEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/rename";
 static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
+
+const string SCLD_PUBLICLINK_ENDPOINT = CLOUD_DOMAIN + "/public";
 
 MarcRestClient::MarcRestClient()
     : restClient(make_unique<curl::curl_easy>()),
@@ -67,6 +70,7 @@ MarcRestClient::MarcRestClient()
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
       cookieStore(*restClient),        // cokie_store is not copyable, init in body
+      proxyUrl(toCopy.proxyUrl),        // copy proxy URL
       authAccount(toCopy.authAccount), // copy account from other one
       authToken(toCopy.authToken) // copy auth token from other one
 
@@ -75,6 +79,11 @@ MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
         restClient->add<CURLOPT_COOKIELIST>(c.data());
     }
     cookieStore.set_file(""); // init cookie engine
+}
+
+void MarcRestClient::setProxy(string proxyUrl)
+{
+    this->proxyUrl = proxyUrl;
 }
 
 string MarcRestClient::paramString(Params const &params)
@@ -110,6 +119,8 @@ string MarcRestClient::performPost()
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
+    if (!proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
@@ -140,6 +151,8 @@ void MarcRestClient::performGet(Container &target)
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
+    if (!proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
@@ -211,7 +224,7 @@ void MarcRestClient::authenticate()
     performPost();
 
     if (cookieStore.get().empty()) // no cookies received, halt
-        throw MailApiException("Failed to authenticate in mail.ru domain!");
+        throw MailApiException("Failed to authenticate " + authAccount.login + " in mail.ru domain!");
 }
 
 void MarcRestClient::obtainCloudCookie()
@@ -231,10 +244,6 @@ void MarcRestClient::obtainCloudCookie()
 
 void MarcRestClient::obtainAuthToken()
 {
-    curl_header header;
-    header.add("Accept: application/json");
-    
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
     string answer = performPost();
 
@@ -254,12 +263,8 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type)
 {
     using Json::Value;
 
-    curl_header header;
-    header.add("Accept: application/json");
-
     string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
     restClient->add<CURLOPT_URL>(url.data());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answer = performPost();
 
     Value response;
@@ -285,10 +290,6 @@ void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashS
     string fileHash = hashSize.substr(0, index);
     string fileSize = hashSize.substr(index + 1, endIndex - (index + 1));
 
-    curl_header header;
-    header.add("Accept: */*");
-    header.add("Origin: " + CLOUD_DOMAIN);
-
     string postFields = paramString({
         {"api", "2"},
         {"conflict", "rewrite"}, // rename is one more discovered option
@@ -299,7 +300,6 @@ void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashS
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
     performPost();
 }
@@ -334,8 +334,6 @@ void MarcRestClient::remove(string remotePath)
 
 SpaceInfo MarcRestClient::df()
 {
-    curl_header header;
-    header.add("Accept: application/json");
 
     string getFields = paramString({
         {"api", "2"},
@@ -343,7 +341,6 @@ SpaceInfo MarcRestClient::df()
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answerJson = performPost();
 
     SpaceInfo result;
@@ -391,6 +388,30 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
     if (oldParentDir != newParentDir) {
         move(oldParentDir + newFilename, newParentDir);
     }
+}
+
+string MarcRestClient::share(string remotePath)
+{
+    string postFields = paramString({
+        {"api", "2"},
+        {"home", remotePath},
+        {"token", authToken},
+    });
+
+    restClient->add<CURLOPT_URL>(SCLD_PUBLISHFILE_ENDPOINT.data());
+    restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
+    string answerJson = performPost();
+
+    Value response;
+    Reader reader;
+
+    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
+        throw MailApiException("Cannot parse JSON share response!");
+
+    if (response["body"] == Value())
+        throw MailApiException("Non-well formed JSON share response!");
+
+    return response["body"].asString();
 }
 
 template <typename Container>
@@ -461,9 +482,6 @@ void MarcRestClient::mkdir(string remotePath)
 
 vector<CloudFile> MarcRestClient::ls(string remotePath)
 {
-    curl_header header;
-    header.add("Accept: application/json");
-
     string getFields = paramString({
         {"api", "2"},
         {"limit", "100500" }, // 100500 files in folder - who'd dare for more?
@@ -472,7 +490,6 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
     });
 
     restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     string answerJson = performPost();
 
     vector<CloudFile> results;
