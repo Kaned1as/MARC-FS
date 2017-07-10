@@ -22,8 +22,8 @@ Features
 
 Installation & Usage
 --------------------
-You should have cmake and g++ at hand.
-MARC-FS also requires `libfuse` (obviously), `libcurl` and `pthread` libraries. Once you have all this, do as usual:
+You should have cmake and g++ with C++14 support at hand.
+MARC-FS also requires `libfuse` (obviously), `libcurl` (min 7.34) and `pthread` libraries. Once you have all this, do as usual:
 
     $ git clone --recursive https://gitlab.com/Kanedias/MARC-FS.git
     $ cd MARC-FS
