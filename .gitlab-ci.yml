@@ -23,11 +23,30 @@ build on ubuntu:
     - mkdir build
     - cd build
     - cmake ..
-    - "make -j$(nproc)"
+    - make -j$(nproc)
     - ./apitest
   artifacts: &common_artifacts
+    expire_in: 1 day
     paths:
       - build/marcfs
+      
+deb for ubuntu:
+  image: ubuntu
+  stage: ubuntu build
+  dependencies: []
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
+  script:
+    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
+    - export DEBEMAIL="adonai@xaker.ru"
+    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
+    - dh_make --packagename marcfs_0.4 --copyright gpl3 --single --createorig --yes
+    - cp README.md debian/README.Debian
+    - dpkg-buildpackage -us -uc -j$(nproc)
+    - cp ../*.deb .
+  artifacts:
+    paths:
+      - "*.deb"
 
 fstest on ubuntu:
   image: ubuntu
@@ -70,6 +89,23 @@ build on fedora:
     - yum -y install git-all cmake gcc-c++ fuse-devel libcurl-devel jsoncpp-devel
   script: *common_script
   artifacts: *common_artifacts
+  
+rpm package for fedora:
+  image: fedora
+  stage: fedora build
+  dependencies: []
+  before_script: 
+    - yum -y install git-all cmake gcc-c++ fuse-devel libcurl-devel jsoncpp-devel jemalloc-devel rpm-build
+  script:
+    - version=$(grep Version fuse-marcfs.spec | grep -oP "\d.*")
+    - tar --transform "s|^|fuse-marcfs-$version/|g" -cvaf fuse-marcfs-$version.tar.bz2 *
+    - mkdir -pv ~/rpmbuild/{RPMS,SRPMS,BUILD,SOURCES,SPECS,tmp}
+    - mv -v fuse-marcfs-$version.tar.bz2 ~/rpmbuild/SOURCES
+    - rpmbuild -ba fuse-marcfs.spec
+    - cp -v /root/rpmbuild/RPMS/*/*.rpm .
+  artifacts:
+    paths:
+      - "*.rpm"
 
 fstest on fedora:
   image: fedora
@@ -77,7 +113,7 @@ fstest on fedora:
   dependencies:
     - build on fedora
   before_script:
-    - yum -y install fuse libcurl jsoncpp python
+    - yum -y install fuse fuse-libs libcurl jsoncpp python
     - useradd --create-home fstest
     - cp build/marcfs tests/fstest.py ~fstest
     - "chown -R fstest: ~fstest"
@@ -96,6 +132,23 @@ build on arch:
     - pacman -S --noconfirm git make cmake gcc fuse2 libcurl-gnutls jsoncpp
   script: *common_script
   artifacts: *common_artifacts
+  
+xz package for arch:
+# image: pritunl/archlinux # GPG signing errors
+  image: base/archlinux
+  stage: arch build
+  dependencies: []
+  before_script:
+    - pacman -Syu --noconfirm
+    - pacman -S --noconfirm git make cmake gcc fuse2 libcurl-gnutls jsoncpp fakeroot
+    - useradd --create-home build
+    - cp PKGBUILD ~build
+  script:
+    - su -c 'makepkg -s' - build
+    - cp -v ~build/*.tar.xz .
+  artifacts:
+    paths:
+      - "*.tar.xz"
 
 fstest on arch:
 # image: pritunl/archlinux
