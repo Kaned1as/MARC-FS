@@ -30,7 +30,7 @@ build on ubuntu:
     paths:
       - build/marcfs
       
-deb for ubuntu:
+deb package for ubuntu:
   image: ubuntu
   stage: ubuntu build
   dependencies: []
@@ -133,7 +133,7 @@ build on arch:
   script: *common_script
   artifacts: *common_artifacts
   
-xz package for arch:
+aur package for arch:
 # image: pritunl/archlinux # GPG signing errors
   image: base/archlinux
   stage: arch build
