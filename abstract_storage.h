@@ -26,6 +26,12 @@
 #include <vector>
 #include <type_traits>
 
+// FreeBSD uses Clang by default, it doesn't have off_t
+// Include stdio.h where it's always defined
+#ifdef __FreeBSD__
+#include <stdio.h>
+#endif
+
 /**
  * @brief The AbstractStorage class - where to save intermediary FUSE filesystem data
  *
