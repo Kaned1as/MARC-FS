@@ -50,6 +50,8 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
     stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
     stbuf->st_nlink = 1;
     stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
+    stbuf->st_blksize = 4096;
+    stbuf->st_blocks = getSize() / 512 + 1;
 #ifndef __APPLE__
     stbuf->st_mtim.tv_sec = mtime;
 #else
