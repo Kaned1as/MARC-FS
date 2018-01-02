@@ -30,7 +30,7 @@ using namespace std;
 
 template<typename T>
 T* MruData::getNode(string path) {
-    rwLock lock(cacheLock);
+    RwLock lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
         T *node = dynamic_cast<T*>(it->second.get());
@@ -51,7 +51,7 @@ template MarcDummyNode* MruData::getNode(string path);
 
 template<typename T>
 void MruData::create(string path) {
-    lock_guard<rwMutex> lock(cacheLock);
+    lock_guard<RwMutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
         throw invalid_argument("Cache already contains node at path " + path);
@@ -65,7 +65,7 @@ template void MruData::create<MarcDirNode>(string path);
 template void MruData::create<MarcDummyNode>(string path);
 
 void MruData::putCacheStat(string path, const CloudFile *cf) {
-    lock_guard<rwMutex> lock(cacheLock);
+    lock_guard<RwMutex> lock(cacheLock);
 
     auto it = cache.find(path);
     if (it != cache.end()) // altering cache where it's already present, skip
@@ -95,7 +95,7 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 }
 
 int MruData::purgeCache(string path) {
-    lock_guard<rwMutex> lock(cacheLock);
+    lock_guard<RwMutex> lock(cacheLock);
     auto it = cache.find(path);
 
     // node doesn't exist
@@ -116,7 +116,7 @@ int MruData::purgeCache(string path) {
 
 void MruData::renameCache(string oldPath, string newPath)
 {
-    lock_guard<rwMutex> lock(cacheLock);
+    lock_guard<RwMutex> lock(cacheLock);
     cache[newPath].swap(cache[oldPath]);
     cache[oldPath].reset(new MarcDummyNode);
 
@@ -127,27 +127,19 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
 {
     // we store cache in sorted map, this means we can find dir contents
     // by finding itself and promoting iterator further
-    rwLock lock(cacheLock);
-    auto it = cache.find(path);
-    if (it == cache.end())
-        return false; // not found in cache
 
-    // make sure we did readdir on that path previously
-    const auto dir = dynamic_cast<MarcDirNode*>(it->second.get());
-    if (!dir)
-        throw invalid_argument("Node at requested path is not a dir!");
-
-    if (!dir->isCached())
-        return false;
-
-    // root dir is special, e.g.
+    // append slash if it's not present. Root dir is special here:
     // "/folder" -> "folder", "/folder/f2" -> "f2"
     bool isRoot = path == "/";
     string nestedPath = isRoot ? path : path + '/';
 
-    // move iterator further as first step, we don't need
-    // the directory itself in listing
-    for (++it; it != cache.end(); ++it) {
+    RwLock lock(cacheLock);
+    auto it = cache.find(nestedPath);
+    if (it == cache.end())
+        return false; // not found in cache
+
+    // so, we found directory in cache, let's iterate over its contents
+    for (; it != cache.end(); ++it) {
         if (it->first.find(nestedPath) != 0) // we are moved to other entries, break
             break;
 
@@ -155,6 +147,9 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
             continue; // skip negative nodes
 
         string innerPath = it->first.substr(nestedPath.size());
+        if (innerPath.empty())
+            continue; // happens when it's root dir or dir itself
+
         if (innerPath.find('/') != string::npos)
             continue; // skip nested directories
 

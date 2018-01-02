@@ -33,11 +33,11 @@
 class CloudFile;
 
 #ifdef __APPLE__
-typedef std::mutex rwMutex;
-typedef std::unique_lock<rwMutex> rwLock;
+typedef std::mutex RwMutex;
+typedef std::unique_lock<RwMutex> RwLock;
 #else
-typedef std::shared_timed_mutex rwMutex;
-typedef std::shared_lock<rwMutex> rwLock;
+typedef std::shared_timed_mutex RwMutex;
+typedef std::shared_lock<RwMutex> RwLock;
 #endif
 
 /**
@@ -125,7 +125,7 @@ private:
     /**
      * @brief cacheLock - lock for changing cache structure
      */
-    rwMutex cacheLock;
+    RwMutex cacheLock;
 };
 
 #endif // MRU_METADATA_H

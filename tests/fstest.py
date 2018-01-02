@@ -124,8 +124,8 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         self.assertTrue(os.path.isfile(fname2), 'Moved file not exists!')
         self.assertEqual(os.stat(fname2).st_size, len(text), 'Moved file size differs from expected!')
 
-    def test_create_folder(self):
-        dirname1 = MARCFS_TEST_DIR + 'testdir/'
+    def test_create_folder(self, dname = 'testdir/'):
+        dirname1 = MARCFS_TEST_DIR + dname
         os.mkdir(dirname1)
         self.assertTrue(os.path.isdir(dirname1), 'Creating directory failed!')
         return dirname1
@@ -187,6 +187,22 @@ class TestMarcfsFuseOperations(unittest.TestCase):
             plink_text = f.read()
             self.assertTrue('https://cloud.mail.ru/public/' in plink_text, 'Public link does not contain url!')
             self.assertTrue(fname.split('/')[-1] in plink_text, 'Public link does not contain file name!')
+
+    # Test to check issue https://gitlab.com/Kanedias/MARC-FS/issues/24 is resolved
+    # The problem was that in tryFillDir we find dir in sorted cache and then iterate next,
+    # expecting that next path will have it with slash, like this: dir/
+    # Initial expectation was based on the fact that no other char can be there before slash.
+    # But there are other chars like '.' or '-' that have numeric value lower than '/'
+    # so after initial filling of some dirs their content was "disappearing" from cache
+    def test_filldir_works_issue24(self):
+        dirname1 = self.test_create_folder('test/')
+        self.test_create_folder('test./')
+        fname = 'testfile'
+        with open(dirname1 + fname, 'w') as f:
+            f.write("there's one for the sorrow")
+        files = os.listdir(dirname1)
+        self.assertTrue(len(files) == 1, 'There should be one file present in folder!')
+        self.assertEqual(files[0], fname, 'There should be a file named testfile in the folder')
 
 
 
