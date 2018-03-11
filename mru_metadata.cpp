@@ -127,29 +127,48 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
 {
     // we store cache in sorted map, this means we can find dir contents
     // by finding itself and promoting iterator further
-
-    // append slash if it's not present. Root dir is special here:
-    // "/folder" -> "folder", "/folder/f2" -> "f2"
-    bool isRoot = path == "/";
-    string nestedPath = isRoot ? path : path + '/';
-
     RwLock lock(cacheLock);
-    auto it = cache.find(nestedPath);
+    auto it = cache.find(path);
     if (it == cache.end())
         return false; // not found in cache
 
-    // so, we found directory in cache, let's iterate over its contents
+    // make sure we did readdir on that path previously
+    const auto dir = dynamic_cast<MarcDirNode*>(it->second.get());
+    if (!dir)
+        throw invalid_argument("Node at requested path is not a dir!");
+
+    if (!dir->isCached())
+        return false;
+
+    // root dir is special, e.g.
+    // "/" -> "/" but "/folder" -> "/folder/"
+    bool isRoot = path == "/";
+    string nestedPath = isRoot ? path : path + '/';
+
+    // handle "folder.", "folder-" that may happen before "folder/"
+    // move iterator to the point where it sees first file inside this dir
+    // see issue #24
+    while (true) {
+        ++it;
+
+        if (it->first.find(path) == string::npos) {
+            // we moved to other entries, meaning this dir is empty
+            // return cached result
+            return true;
+        }
+
+        if (it->first.find(nestedPath) == 0)
+            break; // found first instance of "folder/something"
+    }
+
     for (; it != cache.end(); ++it) {
-        if (it->first.find(nestedPath) != 0) // we are moved to other entries, break
+        if (it->first.find(nestedPath) != 0) // we moved to other entries, break
             break;
 
         if (!it->second->exists())
             continue; // skip negative nodes
 
         string innerPath = it->first.substr(nestedPath.size());
-        if (innerPath.empty())
-            continue; // happens when it's root dir or dir itself
-
         if (innerPath.find('/') != string::npos)
             continue; // skip nested directories
 

@@ -225,6 +225,7 @@ size_t MarcFileNode::getSize() const
 void MarcFileNode::setNewlyCreated(bool value)
 {
     newlyCreated = value;
+    mtime = time(nullptr);
 }
 
 bool MarcFileNode::isOpen() const

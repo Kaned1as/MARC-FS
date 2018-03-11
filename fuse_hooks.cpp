@@ -309,6 +309,10 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
         filler(dirhandle, cf.getName().data(), &stbuf, 0);
     }
+
+    // confirm readdir cache
+    auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
+    node->setCached(true);
     API_CALL_TRY_FINISH
 
     return 0;
