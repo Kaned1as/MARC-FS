@@ -2,10 +2,18 @@ project(MARC-FS)
 cmake_minimum_required(VERSION 2.8)
 aux_source_directory(. SRC_LIST)
 
+# determine, whether we want a static binary
+set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
+if(STATIC_LINKING)
+    set(BUILD_SHARED_LIBS OFF)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    SET(CMAKE_EXE_LINKER_FLAGS "-static")
+endif(STATIC_LINKING)
+
 # C++ standard
 set(CMAKE_CXX_STANDARD 14)
-MESSAGE(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
-MESSAGE(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
+message(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
+message(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
 set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26")
@@ -19,12 +27,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 #                            #
 
 # Curl C++ bindings
-ADD_SUBDIRECTORY(contrib/curlcpp EXCLUDE_FROM_ALL)
-INCLUDE_DIRECTORIES(${CURLCPP_SOURCE_DIR}/include)
+add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
+include_directories(${CURLCPP_SOURCE_DIR}/include)
 
 # Googletest bindings
-ADD_SUBDIRECTORY(contrib/googletest/googletest EXCLUDE_FROM_ALL)
-INCLUDE_DIRECTORIES(${gtest_SOURCE_DIR}/include)
+add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
+include_directories(${gtest_SOURCE_DIR}/include)
 
 #                            #
 # external libs and packages #
