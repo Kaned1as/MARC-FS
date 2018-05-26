@@ -20,6 +20,7 @@
 
 #include <regex>
 #include <unordered_map>
+#include <thread>
 
 #include "fuse_hooks.h"
 
@@ -211,23 +212,31 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
     // API call required, try to find file on remote side
     bool found = false;
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
 
-    // file may be compound one here
-    // this may happen when calling by absolute path first (without readdir cache)
-    handleCompounds(contents);
+        // file may be compound one here
+        // this may happen when calling by absolute path first (without readdir cache)
+        handleCompounds(contents);
 
-    // put all retrieved files in cache
-    for (CloudFile &file : contents) {
-        fsMetadata.putCacheStat(dirname + file.getName(), &file);
-        if (file.getName() == filename) {
-            // file found - fill statbuf
-            fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
-            found = true;
+        // put all retrieved files in cache
+        for (CloudFile &file : contents) {
+            fsMetadata.putCacheStat(dirname + file.getName(), &file);
+            if (file.getName() == filename) {
+                // file found - fill statbuf
+                fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
+                found = true;
+            }
         }
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return getattrCallback(path, stbuf);
+        }
+        return -EIO;
     }
-    API_CALL_TRY_FINISH
 
     if (found)
         return 0;
@@ -273,19 +282,15 @@ int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
     return openCallback(path, fi);
 }
 
-int openCallback(const char *path, struct fuse_file_info */*fi*/)
+int openCallback(const char *path, struct fuse_file_info *fi)
 {
     // file should already be present as FUSE does `getattr` call prior to open
     auto file = fsMetadata.getNode<MarcFileNode>(path);
-
-    API_CALL_TRY_BEGIN
-    file->open(client.get(), path);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    auto client = fsMetadata.clientPool.acquire();
+    return file->open(client.get(), path);
 }
 
-int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t /*offset*/, struct fuse_file_info */*fi*/)
+int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
 {
     filler(dirhandle, ".", nullptr, 0);
     filler(dirhandle, "..", nullptr, 0);
@@ -296,24 +301,32 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     if (fsMetadata.tryFillDir(pathStr, dirhandle, filler))
         return 0;
 
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(pathStr);
-    handleCompounds(contents);
-    bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true for '/' dir
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        auto contents = client->ls(pathStr);
+        handleCompounds(contents);
+        bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true for '/' dir
 
-    for (const CloudFile &cf : contents) {
-        string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
+        for (const CloudFile &cf : contents) {
+            string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
-        struct stat stbuf = {};
-        fsMetadata.putCacheStat(fullPath, &cf);
-        fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
-        filler(dirhandle, cf.getName().data(), &stbuf, 0);
+            struct stat stbuf = {};
+            fsMetadata.putCacheStat(fullPath, &cf);
+            fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
+            filler(dirhandle, cf.getName().data(), &stbuf, 0);
+        }
+
+        // confirm readdir cache
+        auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
+        node->setCached(true);
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return readdirCallback(path, dirhandle, filler, offset, fi);
+        }
+        return -EIO;
     }
-
-    // confirm readdir cache
-    auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
-    node->setCached(true);
-    API_CALL_TRY_FINISH
 
     return 0;
 }
@@ -343,11 +356,8 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     if (res)
         return res;
 
-    API_CALL_TRY_BEGIN
-    file->flush(client.get(), path);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    auto client = fsMetadata.clientPool.acquire();
+    return file->flush(client.get(), path);
 }
 
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
@@ -358,26 +368,42 @@ int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
     return 0;
 }
 
-int mkdirCallback(const char *path, mode_t /*mode*/)
+int mkdirCallback(const char *path, mode_t mode)
 {
-    API_CALL_TRY_BEGIN
-    client->mkdir(path);
-    fsMetadata.create<MarcDirNode>(path);
-    API_CALL_TRY_FINISH
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        client->mkdir(path);
+        fsMetadata.create<MarcDirNode>(path);
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return mkdirCallback(path, mode);
+        }
+        return -EIO;
+    }
 
     return 0;
 }
 
 int rmdirCallback(const char *path)
 {
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(path);
-    if (!contents.empty())
-        return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        auto contents = client->ls(path);
+        if (!contents.empty())
+            return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
-    client->remove(path);
-    return fsMetadata.purgeCache(path);
-    API_CALL_TRY_FINISH
+        client->remove(path);
+        return fsMetadata.purgeCache(path);
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return rmdirCallback(path);
+        }
+        return -EIO;
+    }
 }
 
 /**
@@ -394,11 +420,19 @@ int unlinkCallback(const char *path)
     // 2. wait for release file .fuse_hidden{...}
     // 3.          unlink file .fuse_hidden{...}
 
-    API_CALL_TRY_BEGIN
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
-    file->remove(client.get(), path);
-    return fsMetadata.purgeCache(path);
-    API_CALL_TRY_FINISH
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        auto file = fsMetadata.getNode<MarcFileNode>(path);
+        file->remove(client.get(), path);
+        return fsMetadata.purgeCache(path);
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return unlinkCallback(path);
+        }
+        return -EIO;
+    }
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
@@ -412,7 +446,7 @@ int renameCallback(const char *oldPath, const char *newPath)
     auto target = fsMetadata.getNode<MarcNode>(newPath);
     auto targetFile = dynamic_cast<MarcFileNode*>(target);
     if (targetFile) {
-        // we have file here, remove it
+        // we have file there, remove it
         targetFile->remove(client.get(), newPath);
     }
 
@@ -427,18 +461,27 @@ int renameCallback(const char *oldPath, const char *newPath)
 
 int truncateCallback(const char *path, off_t size)
 {
+    // called on already opened files
     auto file = fsMetadata.getNode<MarcFileNode>(path);
     file->truncate(size);
     return 0;
 }
 
-int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
+int mknodCallback(const char *path, mode_t mode, dev_t dev)
 {
-    API_CALL_TRY_BEGIN
-    client->create(path);
-    fsMetadata.create<MarcFileNode>(path);
-    fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
-    API_CALL_TRY_FINISH
+    try {
+        auto client = fsMetadata.clientPool.acquire();
+        client->create(path);
+        fsMetadata.create<MarcFileNode>(path);
+        fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
+    } catch (MailApiException &exc) {
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return mknodCallback(path, mode, dev);
+        }
+        return -EIO;
+    }
 
     return 0;
 }

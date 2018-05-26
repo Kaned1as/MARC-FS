@@ -107,6 +107,7 @@ int MruData::purgeCache(string path) {
         // we can't delete a file if it's open, should wait when it's closed
         // this should actually never happen
         // fuse will handle this situation before us (hiding file)
+        cerr << "This shouldn't happen: opened file gets deleted!";
         return -EINPROGRESS;
     }
 

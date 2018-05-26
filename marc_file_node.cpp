@@ -20,6 +20,7 @@
 
 #include <fuse.h>
 #include <algorithm>
+#include <thread>
 
 #include "marc_api.h"
 #include "mru_metadata.h"
@@ -59,7 +60,7 @@ void MarcFileNode::fillStats(struct stat *stbuf) const
 #endif
 }
 
-void MarcFileNode::open(MarcRestClient *client, string path)
+int MarcFileNode::open(MarcRestClient *client, string path)
 {
     // open is potentially network-download operation, lock it
     unique_lock<mutex> guard(netMutex);
@@ -67,7 +68,7 @@ void MarcFileNode::open(MarcRestClient *client, string path)
     if (opened) {
         // already opened by some other thread/process,
         // no need to download or init
-        return;
+        return 0;
     }
 
     // initialize storage
@@ -76,25 +77,39 @@ void MarcFileNode::open(MarcRestClient *client, string path)
 
     if (newlyCreated) {
         // do nothing, await for `write`s
-        return;
+        return 0;
     }
 
-    // not a new file, need to download
-    if (fileSize > MARCFS_MAX_FILE_SIZE) {
-        // compound file
-        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
-        for (size_t idx = 0; idx < partCount; ++idx) {
-            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
-            client->download(extendedPathname, *cachedContent); // append part to current cache
+    try {
+        // not a new file, need to download
+        if (fileSize > MARCFS_MAX_FILE_SIZE) {
+            // compound file
+            size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
+            for (size_t idx = 0; idx < partCount; ++idx) {
+                string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+                client->download(extendedPathname, *cachedContent); // append part to current cache
+            }
+        } else {
+            // single file
+            client->download(path, *cachedContent);
         }
-    } else {
-        // single file
-        client->download(path, *cachedContent);
+    } catch (MailApiException &exc) {
+        opened = false;
+        cachedContent->clear();
+
+        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+        if (exc.getResponseCode() >= 500) {
+            this_thread::sleep_for(10ms);
+            return open(client, path);
+        }
+        return -EIO;
     }
+
+    return 0;
 }
 
 
-void MarcFileNode::flush(MarcRestClient *client, string path)
+int MarcFileNode::flush(MarcRestClient *client, string path)
 {
     // open is potentially network-upload operation, lock it
     unique_lock<mutex> guard(netMutex);
@@ -152,6 +167,9 @@ int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
 
 void MarcFileNode::remove(MarcRestClient *client, string path)
 {
+    // remove is network operation, lock it
+    unique_lock<mutex> guard(netMutex);
+
     if (fileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, remove each part
         size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;

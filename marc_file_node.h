@@ -38,8 +38,8 @@ public:
     MarcFileNode();
 
     virtual void fillStats(struct stat *stbuf) const override;
-    void open(MarcRestClient *client, std::string path);
-    void flush(MarcRestClient *client, std::string path);
+    int open(MarcRestClient *client, std::string path);
+    int flush(MarcRestClient *client, std::string path);
     int read(char *buf, size_t size, uint64_t offsetBytes);
     int write(const char *buf, size_t size, uint64_t offsetBytes);
     void remove(MarcRestClient *client, std::string path);
