@@ -1,0 +1,344 @@
+{
+  "variant": {
+    "label": "Debug",
+    "keywordSettings": {
+      "buildType": "debug"
+    },
+    "description": "Emit debug information without performing optimizations"
+  },
+  "activeEnvironments": [],
+  "codeModel": {
+    "configurations": [
+      {
+        "name": "Debug",
+        "projects": [
+          {
+            "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/curlcpp",
+            "name": "CURLCPP",
+            "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/curlcpp",
+            "targets": [
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/curlcpp/src/libcurlcppd.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/curlcpp/src",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -std=c++11 -g   -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "curl_easy.cpp",
+                      "curl_header.cpp",
+                      "curl_global.cpp",
+                      "curl_form.cpp",
+                      "curl_multi.cpp",
+                      "curl_share.cpp",
+                      "curl_info.cpp",
+                      "curl_cookie.cpp",
+                      "curl_exception.cpp",
+                      "cookie.cpp",
+                      "cookie_date.cpp",
+                      "cookie_time.cpp",
+                      "cookie_datetime.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "libcurlcppd.a",
+                "linkerLanguage": "CXX",
+                "name": "curlcpp",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/src",
+                "type": "STATIC_LIBRARY"
+              }
+            ]
+          },
+          {
+            "buildDirectory": "/home/adonai/Work/C++/marcfs/build",
+            "name": "MARC-FS",
+            "sourceDirectory": "/home/adonai/Work/C++/marcfs",
+            "targets": [
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/apitest"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g   -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "isSystem": true,
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "abstract_storage.cpp",
+                      "account.cpp",
+                      "file_storage.cpp",
+                      "fuse_hooks.cpp",
+                      "marc_api.cpp",
+                      "marc_api_cloudfile.cpp",
+                      "marc_api_shard.cpp",
+                      "marc_dir_node.cpp",
+                      "marc_dummy_node.cpp",
+                      "marc_file_node.cpp",
+                      "marc_node.cpp",
+                      "memory_storage.cpp",
+                      "mru_metadata.cpp",
+                      "object_pool.cpp",
+                      "utils.cpp",
+                      "tests/apitest.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "apitest",
+                "linkFlags": "-rdynamic",
+                "linkLanguageFlags": "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g",
+                "linkLibraries": "contrib/googletest/googletest/libgtest_maind.a contrib/curlcpp/src/libcurlcppd.a -ljsoncpp -lfuse contrib/googletest/googletest/libgtestd.a -pthread -lcurl",
+                "linkerLanguage": "CXX",
+                "name": "apitest",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs",
+                "type": "EXECUTABLE"
+              },
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/marcfs"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g   -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "abstract_storage.cpp",
+                      "account.cpp",
+                      "file_storage.cpp",
+                      "fuse_hooks.cpp",
+                      "main.cpp",
+                      "marc_api.cpp",
+                      "marc_api_cloudfile.cpp",
+                      "marc_api_shard.cpp",
+                      "marc_dir_node.cpp",
+                      "marc_dummy_node.cpp",
+                      "marc_file_node.cpp",
+                      "marc_node.cpp",
+                      "memory_storage.cpp",
+                      "mru_metadata.cpp",
+                      "object_pool.cpp",
+                      "utils.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "marcfs",
+                "linkFlags": "-rdynamic",
+                "linkLanguageFlags": "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g",
+                "linkLibraries": "contrib/curlcpp/src/libcurlcppd.a -lpthread -ljsoncpp -lfuse -ljemalloc -lcurl",
+                "linkerLanguage": "CXX",
+                "name": "marcfs",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs",
+                "type": "EXECUTABLE"
+              },
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/curlcpp/src/libcurlcppd.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/curlcpp/src",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -std=c++11 -g   -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "curl_easy.cpp",
+                      "curl_header.cpp",
+                      "curl_global.cpp",
+                      "curl_form.cpp",
+                      "curl_multi.cpp",
+                      "curl_share.cpp",
+                      "curl_info.cpp",
+                      "curl_cookie.cpp",
+                      "curl_exception.cpp",
+                      "cookie.cpp",
+                      "cookie_date.cpp",
+                      "cookie_time.cpp",
+                      "cookie_datetime.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "libcurlcppd.a",
+                "linkerLanguage": "CXX",
+                "name": "curlcpp",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/src",
+                "type": "STATIC_LIBRARY"
+              },
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest/libgtest_maind.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g    -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -Wall -Wshadow -Werror -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "isSystem": true,
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "src/gtest_main.cc"
+                    ]
+                  }
+                ],
+                "fullName": "libgtest_maind.a",
+                "linkerLanguage": "CXX",
+                "name": "gtest_main",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest",
+                "type": "STATIC_LIBRARY"
+              },
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest/libgtestd.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g    -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -Wall -Wshadow -Werror -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "src/gtest-all.cc"
+                    ]
+                  }
+                ],
+                "fullName": "libgtestd.a",
+                "linkerLanguage": "CXX",
+                "name": "gtest",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest",
+                "type": "STATIC_LIBRARY"
+              }
+            ]
+          },
+          {
+            "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest",
+            "name": "gtest",
+            "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest",
+            "targets": [
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest/libgtest_maind.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g    -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -Wall -Wshadow -Werror -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "isSystem": true,
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "src/gtest_main.cc"
+                    ]
+                  }
+                ],
+                "fullName": "libgtest_maind.a",
+                "linkerLanguage": "CXX",
+                "name": "gtest_main",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest",
+                "type": "STATIC_LIBRARY"
+              },
+              {
+                "artifacts": [
+                  "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest/libgtestd.a"
+                ],
+                "buildDirectory": "/home/adonai/Work/C++/marcfs/build/contrib/googletest/googletest",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g    -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -Wall -Wshadow -Werror -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -std=gnu++14",
+                    "includePath": [
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/curlcpp/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest/include"
+                      },
+                      {
+                        "path": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest"
+                      }
+                    ],
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "src/gtest-all.cc"
+                    ]
+                  }
+                ],
+                "fullName": "libgtestd.a",
+                "linkerLanguage": "CXX",
+                "name": "gtest",
+                "sourceDirectory": "/home/adonai/Work/C++/marcfs/contrib/googletest/googletest",
+                "type": "STATIC_LIBRARY"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cookie": "0.23620920773636622",
+    "inReplyTo": "codemodel",
+    "type": "reply"
+  }
+}

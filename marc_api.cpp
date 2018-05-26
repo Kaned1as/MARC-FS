@@ -121,6 +121,8 @@ string MarcRestClient::performPost()
     ScopeGuard resetter = [&] { restClient->reset(); };
     if (!proxyUrl.empty())
         restClient->add<CURLOPT_PROXY>(proxyUrl.data());
+    restClient->add<CURLOPT_TIMEOUT>(30L);
+    restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
@@ -153,11 +155,14 @@ void MarcRestClient::performGet(Container &target)
     ScopeGuard resetter = [&] { restClient->reset(); };
     if (!proxyUrl.empty())
         restClient->add<CURLOPT_PROXY>(proxyUrl.data());
+    restClient->add<CURLOPT_TIMEOUT>(30L);
+    restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+
     restClient->add<CURLOPT_WRITEDATA>(&target);
     restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto result = static_cast<Container *>(userp);
@@ -450,6 +455,13 @@ void MarcRestClient::upload(string remotePath, Container &body, size_t start, si
 
     // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_URL>(uploadUrl.data());
+    restClient->add<CURLOPT_TIMEOUT>(30L);
+    restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
+    restClient->add<CURLOPT_VERBOSE>(verbose);
+    restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
+
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto source = static_cast<ReadData<Container> *>(userp);
