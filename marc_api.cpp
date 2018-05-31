@@ -526,6 +526,7 @@ template<typename Container>
 void MarcRestClient::download(string remotePath, Container& target)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
+    restClient->escape(remotePath);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     performGet(target);
 }

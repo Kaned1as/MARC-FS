@@ -67,6 +67,16 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         with open(fname, 'w'):
             os.utime(fname, None)
 
+    def test_open_file_with_special_chars_issue27(self):
+        # see https://gitlab.com/Kanedias/MARC-FS/issues/27
+        fname = MARCFS_TEST_DIR + '@%$%#^#^%%#%#&%'
+        text = self.random_string()
+        with open(fname, 'w') as f:
+            f.write(text)
+        with open(fname, 'r') as f:
+            self.assertEqual(f.read(), text, 'Written and read content is not equal!')
+
+
     def test_write_to_file(self):
         fname = MARCFS_TEST_DIR + str(uuid.uuid4())
         text = self.random_string()
