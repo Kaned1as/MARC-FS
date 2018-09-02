@@ -216,6 +216,9 @@ AbstractStorage& MarcFileNode::getCachedContent()
 
 size_t MarcFileNode::getSize() const
 {
+    // guard against trying to get size for getattr call when release is in progress
+    unique_lock<mutex> guard(netMutex);
+
     if (!cachedContent->empty())
         return cachedContent->size();
 

@@ -94,7 +94,7 @@ private:
      *
      * Lock this in case some do-once network operation is possible.
      */
-    std::mutex netMutex;
+    mutable std::mutex netMutex;
 
     /**
      * @brief opened - indicated whether the file is already open by
