@@ -174,7 +174,7 @@ void MarcRestClient::performGet(Container &target)
 
     try {
         restClient->perform();
-    } catch (curl::curl_easy_exception error) {
+    } catch (curl::curl_easy_exception &error) {
         curl::curlcpp_traceback errors = error.get_traceback();
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");

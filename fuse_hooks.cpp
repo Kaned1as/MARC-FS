@@ -26,18 +26,6 @@
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
 
-#define API_CALL_TRY_BEGIN  \
-    try { \
-        auto client = fsMetadata.clientPool.acquire();
-
-#define API_CALL_TRY_FINISH \
-    } catch (MailApiException &exc) { \
-        cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl; \
-        if (exc.getResponseCode() >= 500) \
-            return -EAGAIN; \
-        return -EIO;\
-    }
-
 const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 
@@ -52,6 +40,28 @@ extern template MarcFileNode* MruData::getNode(string);
 extern template MarcDirNode* MruData::getNode(string);
 extern template void MruData::create<MarcDirNode>(string);
 extern template void MruData::create<MarcFileNode>(string);
+
+int doWithRetry(std::function<int(MarcRestClient *)> what) {
+    uint retries = 3;
+
+    while (retries > 0) {
+        try {
+            auto client = fsMetadata.clientPool.acquire();
+            return what(client.get());
+        } catch (MailApiException &exc) {
+            cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+            if (exc.getResponseCode() >= 500) {
+                retries--;
+                continue;
+            }
+
+            return -EIO;
+        }
+    }
+
+    // should never happen
+    return -EINVAL;
+}
 
 /**
  * @brief handleCompounds - collapse compounds into regular files with greater size
@@ -128,20 +138,23 @@ int handleLinks(string filePath, MarcFileNode* file) {
     if (origFile->getSize() > MARCFS_MAX_FILE_SIZE) {
         // it's compound, retrieve links for each part
         size_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
-        API_CALL_TRY_BEGIN
-        for (size_t idx = 0; idx < partCount; ++idx) {
-            string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
-            link += extendedPath + ": ";
-            link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
-        }
-        API_CALL_TRY_FINISH
+        doWithRetry([&](MarcRestClient *client) -> int {
+            for (size_t idx = 0; idx < partCount; ++idx) {
+                string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
+                link += extendedPath + ": ";
+                link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
+            }
+            return 0;
+        });
     } else {
         // single file, single link
-        API_CALL_TRY_BEGIN
-        link += origPath + ": ";
-        link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(origPath) + '\n';
-        API_CALL_TRY_FINISH
+        doWithRetry([&](MarcRestClient *client) -> int {
+            link += origPath + ": ";
+            link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(origPath) + '\n';
+            return 0;
+        });
     }
+
     file->truncate(0);
     file->write(link.data(), link.size(), 0);
 
@@ -210,31 +223,31 @@ int getattrCallback(const char *path, struct stat *stbuf)
     string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
 
     // API call required, try to find file on remote side
-    bool found = false;
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        bool found = false;
+        auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
 
-    // file may be compound one here
-    // this may happen when calling by absolute path first (without readdir cache)
-    handleCompounds(contents);
+        // file may be compound one here
+        // this may happen when calling by absolute path first (without readdir cache)
+        handleCompounds(contents);
 
-    // put all retrieved files in cache
-    for (CloudFile &file : contents) {
-        fsMetadata.putCacheStat(dirname + file.getName(), &file);
-        if (file.getName() == filename) {
-            // file found - fill statbuf
-            fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
-            found = true;
+        // put all retrieved files in cache
+        for (CloudFile &file : contents) {
+            fsMetadata.putCacheStat(dirname + file.getName(), &file);
+            if (file.getName() == filename) {
+                // file found - fill statbuf
+                fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
+                found = true;
+            }
         }
-    }
-    API_CALL_TRY_FINISH
 
-    if (found)
-        return 0;
+        if (found)
+            return 0;
 
-    // not found - put negative mark in cache
-    fsMetadata.putCacheStat(path, nullptr);
-    return -ENOENT;
+        // not found - put negative mark in cache
+        fsMetadata.putCacheStat(path, nullptr);
+        return -ENOENT;
+    });
 }
 
 int statfsCallback(const char */*path*/, struct statvfs *stat)
@@ -251,16 +264,16 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
      *   uint32 f_spare[6]; // reserved
      */
 
-    API_CALL_TRY_BEGIN
-    auto info = client->df();
-    stat->f_fsid = {}; // ignored
-    stat->f_bsize = 4096; // a guess!
-    stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
-    stat->f_bfree = stat->f_blocks - info.usedMiB * 256;
-    stat->f_bavail = stat->f_bfree;
-    stat->f_namemax = 256;
-    return 0;
-    API_CALL_TRY_FINISH
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto info = client->df();
+        stat->f_fsid = {}; // ignored
+        stat->f_bsize = 4096; // a guess!
+        stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
+        stat->f_bfree = stat->f_blocks - info.usedMiB * 256;
+        stat->f_bavail = stat->f_bfree;
+        stat->f_namemax = 256;
+        return 0;
+    });
 
 }
 
@@ -278,11 +291,10 @@ int openCallback(const char *path, struct fuse_file_info */*fi*/)
     // file should already be present as FUSE does `getattr` call prior to open
     auto file = fsMetadata.getNode<MarcFileNode>(path);
 
-    API_CALL_TRY_BEGIN
-    file->open(client.get(), path);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        file->open(client, path);
+        return 0;
+    });
 }
 
 int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t /*offset*/, struct fuse_file_info */*fi*/)
@@ -296,26 +308,25 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     if (fsMetadata.tryFillDir(pathStr, dirhandle, filler))
         return 0;
 
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(pathStr);
-    handleCompounds(contents);
-    bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true for '/' dir
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto contents = client->ls(pathStr);
+        handleCompounds(contents);
+        bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true for '/' dir
 
-    for (const CloudFile &cf : contents) {
-        string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
+        for (const CloudFile &cf : contents) {
+            string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
-        struct stat stbuf = {};
-        fsMetadata.putCacheStat(fullPath, &cf);
-        fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
-        filler(dirhandle, cf.getName().data(), &stbuf, 0);
-    }
+            struct stat stbuf = {};
+            fsMetadata.putCacheStat(fullPath, &cf);
+            fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
+            filler(dirhandle, cf.getName().data(), &stbuf, 0);
+        }
 
-    // confirm readdir cache
-    auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
-    node->setCached(true);
-    API_CALL_TRY_FINISH
-
-    return 0;
+        // confirm readdir cache
+        auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
+        node->setCached(true);
+        return 0;
+    });
 }
 
 int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
@@ -343,11 +354,10 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     if (res)
         return res;
 
-    API_CALL_TRY_BEGIN
-    file->flush(client.get(), path);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        file->flush(client, path);
+        return 0;
+    });
 }
 
 int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
@@ -360,24 +370,23 @@ int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
 
 int mkdirCallback(const char *path, mode_t /*mode*/)
 {
-    API_CALL_TRY_BEGIN
-    client->mkdir(path);
-    fsMetadata.create<MarcDirNode>(path);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        client->mkdir(path);
+        fsMetadata.create<MarcDirNode>(path);
+            return 0;
+    });
 }
 
 int rmdirCallback(const char *path)
 {
-    API_CALL_TRY_BEGIN
-    auto contents = client->ls(path);
-    if (!contents.empty())
-        return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto contents = client->ls(path);
+        if (!contents.empty())
+            return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
-    client->remove(path);
-    return fsMetadata.purgeCache(path);
-    API_CALL_TRY_FINISH
+        client->remove(path);
+        return fsMetadata.purgeCache(path);
+    });
 }
 
 /**
@@ -394,11 +403,11 @@ int unlinkCallback(const char *path)
     // 2. wait for release file .fuse_hidden{...}
     // 3.          unlink file .fuse_hidden{...}
 
-    API_CALL_TRY_BEGIN
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
-    file->remove(client.get(), path);
-    return fsMetadata.purgeCache(path);
-    API_CALL_TRY_FINISH
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto file = fsMetadata.getNode<MarcFileNode>(path);
+        file->remove(client, path);
+        return fsMetadata.purgeCache(path);
+    });
 }
 
 int renameCallback(const char *oldPath, const char *newPath)
@@ -408,21 +417,20 @@ int renameCallback(const char *oldPath, const char *newPath)
         return -ENOENT;
     }
 
-    API_CALL_TRY_BEGIN
-    auto target = fsMetadata.getNode<MarcNode>(newPath);
-    auto targetFile = dynamic_cast<MarcFileNode*>(target);
-    if (targetFile) {
-        // we have file here, remove it
-        targetFile->remove(client.get(), newPath);
-    }
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto target = fsMetadata.getNode<MarcNode>(newPath);
+        auto targetFile = dynamic_cast<MarcFileNode*>(target);
+        if (targetFile) {
+            // we have file here, remove it
+            targetFile->remove(client, newPath);
+        }
 
-    // if we write new file and try to rename it while flushing to cloud
-    // it will fail here with -EIO as actual addition happens only after file is uploaded
-    node->rename(client.get(), oldPath, newPath);
-    fsMetadata.renameCache(oldPath, newPath);
-    API_CALL_TRY_FINISH
-
-    return 0;
+        // if we write new file and try to rename it while flushing to cloud
+        // it will fail here with -EIO as actual addition happens only after file is uploaded
+        node->rename(client, oldPath, newPath);
+        fsMetadata.renameCache(oldPath, newPath);
+        return 0;
+    });
 }
 
 int truncateCallback(const char *path, off_t size)
@@ -434,11 +442,10 @@ int truncateCallback(const char *path, off_t size)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    API_CALL_TRY_BEGIN
-    client->create(path);
-    fsMetadata.create<MarcFileNode>(path);
-    fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
-    API_CALL_TRY_FINISH
-
-    return 0;
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        client->create(path);
+        fsMetadata.create<MarcFileNode>(path);
+        fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
+        return 0;
+    });
 }
