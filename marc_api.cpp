@@ -133,7 +133,7 @@ string MarcRestClient::performPost()
     restClient->add<CURLOPT_WRITEDATA>(writer.get_stream());
     try {
         restClient->perform();
-    } catch (curl::curl_easy_exception error) {
+    } catch (curl::curl_easy_exception &error) {
         error.print_traceback();
         throw MailApiException("Couldn't perform request!");
     }
