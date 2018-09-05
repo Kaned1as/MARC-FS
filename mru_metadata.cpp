@@ -148,7 +148,13 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
     // handle "folder.", "folder-" that may happen before "folder/"
     // move iterator to the point where it sees first file inside this dir
     // see issue #24
-    for (; it != cache.end(); ++it) {
+    while (true) {
+        ++it;
+
+        // reached the end of the cache, meaning this folder was last in cache and
+        // we have cache entry for this dir itself but not for its contents
+        if (it == cache.end())
+            return false;
 
         if (it->first.find(path) == string::npos) {
             // we moved to other entries, meaning this dir is empty
