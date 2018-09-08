@@ -260,8 +260,8 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
         auto info = client->df();
         stat->f_fsid = {}; // ignored
         stat->f_bsize = 4096; // a guess!
-        stat->f_blocks = info.totalMiB * 256; // * 1024 * 1024 / f_bsize
-        stat->f_bfree = stat->f_blocks - info.usedMiB * 256;
+        stat->f_blocks = info.total / stat->f_bsize;
+        stat->f_bfree = stat->f_blocks - info.used / stat->f_bsize;
         stat->f_bavail = stat->f_bfree;
         stat->f_namemax = 256;
         return 0;

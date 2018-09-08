@@ -358,14 +358,14 @@ SpaceInfo MarcRestClient::df()
         throw MailApiException("Cannot parse JSON df response!");
 
     // if `total` is there, `used` will definitely be...
-    if (response["body"] == Value() || response["body"]["total"] == Value())
+    if (response["body"] == Value() || response["body"]["bytes_total"] == Value())
         throw MailApiException("Non-well formed JSON df response!");
 
-    Value &total = response["body"]["total"];
-    Value &used = response["body"]["used"];
+    Value &total = response["body"]["bytes_total"];
+    Value &used = response["body"]["bytes_used"];
 
-    result.totalMiB = total.asUInt64();
-    result.usedMiB = used.asUInt();
+    result.total = total.asUInt64();
+    result.used = used.asUInt64();
     return result;
 }
 

@@ -84,8 +84,8 @@ TEST(ApiIntegrationTesting, TestShowUsage) {
     auto mrc = setUpMrc();
     auto stats = mrc->df();
 
-    EXPECT_EQ(stats.totalMiB, 16 * 1024); // Mail.Ru default storage size - 16 GiB
-    EXPECT_EQ(stats.usedMiB, 491); // Mail.Ru default content weight
+    EXPECT_EQ(stats.total, 16L * 1024 * 1024 * 1024); // Mail.Ru default storage size - 16 GiB
+    EXPECT_EQ(stats.used, 515340199); // Mail.Ru default content weight
 }
 
 TEST(ApiIntegrationTesting, TestCreateFile) {
