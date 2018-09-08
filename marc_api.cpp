@@ -123,8 +123,8 @@ string MarcRestClient::performPost()
         restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
-    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
+    restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
@@ -157,10 +157,10 @@ void MarcRestClient::performGet(Container &target)
         restClient->add<CURLOPT_PROXY>(proxyUrl.data());
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
+    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
     restClient->add<CURLOPT_WRITEDATA>(&target);
@@ -454,12 +454,6 @@ void MarcRestClient::upload(string remotePath, Container &body, size_t start, si
                  curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(realSize)));
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
-    restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
-    restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
-    restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
-    restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
-    restClient->add<CURLOPT_VERBOSE>(verbose);
-    restClient->add<CURLOPT_DEBUGFUNCTION>(trace_post);
 
     // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
