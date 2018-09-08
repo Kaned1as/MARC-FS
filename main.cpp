@@ -18,10 +18,11 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <sys/stat.h> // stat syscall
-#include <cstddef> // offsetof macro
+#include <sys/stat.h>   // stat syscall
+#include <cstddef>      // offsetof macro
 #include <string.h>
-#include <unistd.h> // getuid
+#include <unistd.h>     // getuid
+#include <signal.h>     // disabling signal handlers
 #include <pwd.h>
 
 #include <json/json.h>
@@ -170,6 +171,9 @@ static void hideSensitive(int argc, char *argv[]) {
 
 int main(int argc, char *argv[])
 {
+    // disable SIGPIPE that may come from openssl internals
+    signal(SIGPIPE, SIG_IGN);
+
     if (getuid() == 0 || geteuid() == 0) {
         cerr << "Running MARC-FS as root opens unacceptable security holes" << endl;
         return -1;

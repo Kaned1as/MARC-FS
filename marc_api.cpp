@@ -125,6 +125,7 @@ string MarcRestClient::performPost()
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_TIMEOUT>(0L);
+    restClient->add<CURLOPT_NOSIGNAL>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);
@@ -160,6 +161,7 @@ void MarcRestClient::performGet(Container &target)
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
     restClient->add<CURLOPT_TIMEOUT>(0L);
+    restClient->add<CURLOPT_NOSIGNAL>(1L);
     restClient->add<CURLOPT_HTTPHEADER>(header.get());
     restClient->add<CURLOPT_USERAGENT>(SAFE_USER_AGENT.data()); // 403 without this
     restClient->add<CURLOPT_VERBOSE>(verbose);

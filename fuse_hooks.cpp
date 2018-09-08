@@ -41,7 +41,7 @@ extern template MarcDirNode* MruData::getNode(string);
 extern template MarcDirNode* MruData::create<MarcDirNode>(string);
 extern template MarcFileNode* MruData::create<MarcFileNode>(string);
 
-int doWithRetry(std::function<int(MarcRestClient *)> what) {
+static int doWithRetry(std::function<int(MarcRestClient *)> what) {
     uint retries = 3;
 
     while (retries > 0) {
