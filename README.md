@@ -1,9 +1,9 @@
 [![Gitter](https://img.shields.io/gitter/room/MARC-FS/MARC-FS.svg)](https://gitter.im/MARC-FS/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![build status](https://gitlab.com/Kanedias/MARC-FS/badges/master/build.svg)](https://gitlab.com/Kanedias/MARC-FS/commits/master)
 [![License](https://img.shields.io/aur/license/marcfs-git.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
-[![Fedora RPM package](https://img.shields.io/badge/Fedora RPM-latest-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/builds/artifacts/master/browse?job=rpm package for fedora)
-[![Ubuntu DEB package](https://img.shields.io/badge/Ubuntu DEB-latest-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/builds/artifacts/master/browse?job=deb package for ubuntu)
-[![Archlinux AUR package](https://img.shields.io/badge/Arch AUR-latest-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/builds/artifacts/master/browse?job=aur package for arch)
+[![Fedora RPM package](https://img.shields.io/badge/Fedora-RPM-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=rpm+package+for+fedora)
+[![Ubuntu DEB package](https://img.shields.io/badge/Ubuntu-DEB-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=deb+package+for+ubuntu)
+[![Archlinux AUR package](https://img.shields.io/badge/Arch-AUR-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=aur+package+for+arch)
 
 MARC-FS
 ===========
@@ -145,3 +145,4 @@ License
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
+

@@ -205,28 +205,40 @@ int getattrCallback(const char *path, struct stat *stbuf)
         return 0;
     }
 
-    // not found in cache, find requested file on cloud
+    bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
     auto slashPos = pathStr.find_last_of('/'); // that would be 5 for /home/1517.svg
     if (slashPos == string::npos)
         return -EIO;
 
     // get containing dir name and filename
-    string dirname = pathStr.substr(0, slashPos + 1); // that would be /home/
+    string dirname = pathStr.substr(0, slashPos); // that would be /home
     string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
 
-    // API call required, try to find file on remote side
+    // dir cache check - if the dir is already cached after readdir
+    // and we had no results in cache above then file is nonexistent
+    auto dirNode = fsMetadata.getNode<MarcDirNode>(dirname);
+    if (dirNode && dirNode->isCached()) {
+        fsMetadata.putCacheStat(path, nullptr); // negative cache
+        return -ENOENT;
+    }
+
+    // not found in cache, find requested file on cloud
+    // get a listing of a containing dir for this file
     return doWithRetry([&](MarcRestClient *client) -> int {
         bool found = false;
-        auto contents = client->ls(dirname); // actual API call - ls the directory that contains this file
+        string dirPath = dirname + (trailingSlash ? "" : "/"); // dir with slash at the end
+        auto contents = client->ls(dirPath); // actual API call - ls the directory that contains this file
 
         // file may be compound one here
         // this may happen when calling by absolute path first (without readdir cache)
         handleCompounds(contents);
 
         // put all retrieved files in cache
-        for (CloudFile &file : contents) {
-            fsMetadata.putCacheStat(dirname + file.getName(), &file);
-            if (file.getName() == filename) {
+        for (CloudFile &cf : contents) {
+            string fullPath = dirPath + cf.getName();
+
+            fsMetadata.putCacheStat(fullPath, &cf);
+            if (cf.getName() == filename) {
                 // file found - fill statbuf
                 fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
                 found = true;
@@ -293,7 +305,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     return doWithRetry([&](MarcRestClient *client) -> int {
         auto contents = client->ls(pathStr);
         handleCompounds(contents);
-        bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true for '/' dir
+        bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
 
         for (const CloudFile &cf : contents) {
             string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();

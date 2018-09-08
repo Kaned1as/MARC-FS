@@ -56,9 +56,9 @@ T* MruData::create(string path) {
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
         throw invalid_argument("Cache already contains node at path " + path);
 
-    auto item = new T();
-    cache[path] = unique_ptr<T>(item);
-    return item;
+    auto node = new T();
+    cache[path] = unique_ptr<T>(node);
+    return node;
 }
 
 // instantiations
