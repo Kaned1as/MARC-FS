@@ -38,8 +38,8 @@ using namespace std;
 extern template MarcNode* MruData::getNode(string);
 extern template MarcFileNode* MruData::getNode(string);
 extern template MarcDirNode* MruData::getNode(string);
-extern template void MruData::create<MarcDirNode>(string);
-extern template void MruData::create<MarcFileNode>(string);
+extern template MarcDirNode* MruData::create<MarcDirNode>(string);
+extern template MarcFileNode* MruData::create<MarcFileNode>(string);
 
 int doWithRetry(std::function<int(MarcRestClient *)> what) {
     uint retries = 3;
@@ -178,14 +178,6 @@ void * initCallback(fuse_conn_info *conn)
 {
 #ifndef __APPLE__ // APPLE doesn't yet have this in osxfuse
     conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
-
-    // confusing, right?
-    // one would think we support async reads because we can invoke downloadAsync from API
-    // but here's the thing - these download-related reads come *sequentially*,
-    // with each next offset being equal to last + total.
-    // FUSE_CAP_ASYNC_READ value means that multiple reads with different offsets
-    // will come in one time. We surely can't support this.
-    conn->want &= static_cast<unsigned>(~FUSE_CAP_ASYNC_READ);
     conn->async_read = 0;
 #endif
     return nullptr;
@@ -208,8 +200,8 @@ int getattrCallback(const char *path, struct stat *stbuf)
     }
 
     if (pathStr == "/") { // special handling for root
-        fsMetadata.create<MarcDirNode>(pathStr);
-        fsMetadata.getNode<MarcDirNode>(pathStr)->fillStats(stbuf);
+        auto root = fsMetadata.create<MarcDirNode>(pathStr);
+        root->fillStats(stbuf);
         return 0;
     }
 
@@ -277,20 +269,10 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 }
 
-int createCallback(const char *path, mode_t mode, fuse_file_info *fi)
-{
-    auto res = mknodCallback(path, mode, 0);
-    if (res)
-        return res;
-
-    return openCallback(path, fi);
-}
-
 int openCallback(const char *path, struct fuse_file_info */*fi*/)
 {
     // file should already be present as FUSE does `getattr` call prior to open
     auto file = fsMetadata.getNode<MarcFileNode>(path);
-
     return doWithRetry([&](MarcRestClient *client) -> int {
         file->open(client, path);
         return 0;
@@ -373,7 +355,7 @@ int mkdirCallback(const char *path, mode_t /*mode*/)
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->mkdir(path);
         fsMetadata.create<MarcDirNode>(path);
-            return 0;
+        return 0;
     });
 }
 
@@ -444,8 +426,8 @@ int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->create(path);
-        fsMetadata.create<MarcFileNode>(path);
-        fsMetadata.getNode<MarcFileNode>(path)->setNewlyCreated(true);
+        auto created = fsMetadata.create<MarcFileNode>(path);
+        created->setNewlyCreated(true);
         return 0;
     });
 }

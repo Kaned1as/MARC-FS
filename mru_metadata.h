@@ -91,7 +91,7 @@ public:
      * @param path path to create node for
      */
     template<typename T>
-    void create(std::string path);
+    T* create(std::string path);
 
     /**
      * @brief purgeCache - erase cache at specified path

@@ -35,7 +35,6 @@ int statfsCallback(const char *path, struct statvfs *stat);
  */
 int utimeCallback(const char *path, struct utimbuf *utime);
 
-int createCallback(const char *path, mode_t mode, struct fuse_file_info *fi);
 int openCallback(const char *path, struct fuse_file_info *fi);
 int releaseCallback(const char *path, struct fuse_file_info *fi);
 

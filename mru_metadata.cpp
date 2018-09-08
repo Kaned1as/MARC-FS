@@ -50,19 +50,21 @@ template MarcDirNode* MruData::getNode(string path);
 template MarcDummyNode* MruData::getNode(string path);
 
 template<typename T>
-void MruData::create(string path) {
+T* MruData::create(string path) {
     lock_guard<RwMutex> lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
         throw invalid_argument("Cache already contains node at path " + path);
 
-    cache[path] = make_unique<T>();
+    auto item = new T();
+    cache[path] = unique_ptr<T>(item);
+    return item;
 }
 
 // instantiations
-template void MruData::create<MarcFileNode>(string path);
-template void MruData::create<MarcDirNode>(string path);
-template void MruData::create<MarcDummyNode>(string path);
+template MarcFileNode* MruData::create<MarcFileNode>(string path);
+template MarcDirNode* MruData::create<MarcDirNode>(string path);
+template MarcDummyNode* MruData::create<MarcDummyNode>(string path);
 
 void MruData::putCacheStat(string path, const CloudFile *cf) {
     lock_guard<RwMutex> lock(cacheLock);

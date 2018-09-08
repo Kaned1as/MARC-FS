@@ -237,7 +237,6 @@ int main(int argc, char *argv[])
     cloudfs_oper.statfs = &statfsCallback;
     cloudfs_oper.utime = &utimeCallback;
     cloudfs_oper.mknod = &mknodCallback;
-    cloudfs_oper.create = &createCallback;
     cloudfs_oper.chmod = &chmodCallback;
 
     // start!
