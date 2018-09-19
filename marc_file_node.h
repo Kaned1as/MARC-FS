@@ -28,16 +28,17 @@
 #include "abstract_storage.h"
 
 class MarcRestClient;
+class CacheNode;
 
 /**
- * @brief The MarcFileNode class - cached node of regular file on the cloud
+ * @brief The MarcFileNode class - opened node of regular file on the cloud
  */
 class MarcFileNode : public MarcNode
 {
 public:
     MarcFileNode();
+    explicit MarcFileNode(CacheNode *cache);
 
-    virtual void fillStats(struct stat *stbuf) const override;
     void open(MarcRestClient *client, std::string path);
     void flush(MarcRestClient *client, std::string path);
     int read(char *buf, size_t size, uint64_t offsetBytes);
@@ -47,13 +48,9 @@ public:
     void truncate(off_t size);
     void release();
 
-    void setSize(size_t fileSize);
-    void setMtime(time_t time);
-    size_t getSize() const;
-
-    AbstractStorage& getCachedContent();
-
-    void setNewlyCreated(bool value);
+    off_t getSize() const;
+    time_t getMtime() const;
+    void setMtime(time_t mtime);
 
     bool isOpen() const;
 
@@ -69,22 +66,15 @@ private:
     bool dirty = false;
 
     /**
-     * @brief newlyCreated - indicates that this file was just created
+     * @brief oldFileSize - holds size that was passed from cloud (or sum of compounds)
      */
-    bool newlyCreated = false;
+    off_t oldFileSize = 0;
 
     /**
-     * @brief fileSize - holds size that was passed from cloud (or sum of compounds)
+     * @brief mtime - modification time of this file
      */
-    size_t fileSize = 0;
+    time_t mtime = time(nullptr);
 
-    /**
-     * @brief mtime - modification time of this file.
-     *
-     * This entity belongs here as directories don't have mtime in Mail.ru Cloud API
-     * (and this is confirmed 'architecture feature')
-     */
-    time_t mtime = 0;
     /**
      * @brief netMutex - track actual network usage by this file.
      *

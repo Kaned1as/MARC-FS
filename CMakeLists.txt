@@ -16,7 +16,7 @@ message(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
 message(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
-set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26")
+set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=30")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FUSE_REQUIRED_FLAGS}")
 
 # modules
@@ -39,12 +39,12 @@ include_directories(${gtest_SOURCE_DIR}/include)
 #                            #
 
 # FUSE
-find_package(FUSE REQUIRED)
-if(NOT FUSE_FOUND)
+find_package(FUSE3 REQUIRED)
+if(NOT FUSE3_FOUND)
     message(SEND_ERROR "Failed to find fuse")
     return()
 else()
-    include_directories(${FUSE_INCLUDE_DIR})
+    include_directories(${FUSE3_INCLUDE_DIR})
 endif()
 
 # JSONCPP
@@ -72,7 +72,7 @@ target_link_libraries(apitest
     gtest_main
     curlcpp
     ${JSONCPP_LIBRARIES}
-    ${FUSE_LIBRARIES})
+    ${FUSE3_LIBRARIES})
 add_test(NAME rest_api_test COMMAND apitest)
 
 # final binary
@@ -81,7 +81,7 @@ target_link_libraries(marcfs
     curlcpp
     pthread
     ${JSONCPP_LIBRARIES}
-    ${FUSE_LIBRARIES}
+    ${FUSE3_LIBRARIES}
 )
 
 # optional libs

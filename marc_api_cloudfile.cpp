@@ -34,7 +34,7 @@ CloudFile::CloudFile(const Json::Value &val) {
     name = val["name"].asString();
     hash = val["hash"].asString();
     size = val["size"].asUInt64();
-    mtime = val["mtime"].asUInt64();
+    mtime = val["mtime"].asInt64();
     virusScan = val["virus_scan"].asString();
 }
 
@@ -88,12 +88,12 @@ void CloudFile::setHash(const std::string &value)
     hash = value;
 }
 
-uint64_t CloudFile::getMtime() const
+time_t CloudFile::getMtime() const
 {
     return mtime;
 }
 
-void CloudFile::setMtime(const uint64_t &value)
+void CloudFile::setMtime(const time_t &value)
 {
     mtime = value;
 }

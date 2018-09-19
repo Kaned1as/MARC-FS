@@ -39,7 +39,7 @@ public:
 
     virtual void open() override;
     virtual bool empty() /*const*/ override;
-    virtual size_t size() /*const*/ override;
+    virtual off_t size() /*const*/ override;
     virtual int read(char *buf, size_t size, uint64_t offset) /*const*/ override;
     virtual int write(const char *buf, size_t size, uint64_t offset) override;
     virtual void append(const char *buf, size_t size) override;

@@ -36,7 +36,7 @@
 
 using namespace std;
 
-extern MruData fsMetadata;
+extern MruMetadataCache fsCache;
 
 // config struct declaration for cmdline parsing
 struct MarcfsConfig {
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
         rc.setProxy(conf.proxyurl);
 
     rc.login(acc); // authenticate one instance to populate pool
-    fsMetadata.clientPool.populate(rc, 25);
+    fsCache.clientPool.populate(rc, 25);
 
     // initialize cache dir
     if (conf.cachedir) {
@@ -220,26 +220,28 @@ int main(int argc, char *argv[])
         }
 
         // cache dir is valid
-        fsMetadata.cacheDir = conf.cachedir;
+        fsCache.cacheDir = conf.cachedir;
     }
 
     // initialize FUSE
     static fuse_operations cloudfs_oper = {};
     cloudfs_oper.init = &initCallback;
-    cloudfs_oper.read = &readCallback;
     cloudfs_oper.getattr = &getattrCallback;
+    cloudfs_oper.opendir = &opendirCallback;
     cloudfs_oper.readdir = &readdirCallback;
+    cloudfs_oper.releasedir = &releasedirCallback;
     cloudfs_oper.open = &openCallback;
+    cloudfs_oper.read = &readCallback;
+    cloudfs_oper.write = &writeCallback;
+    cloudfs_oper.flush = &flushCallback;
     cloudfs_oper.release = &releaseCallback;
     cloudfs_oper.mkdir = &mkdirCallback;
     cloudfs_oper.rmdir = &rmdirCallback;
-    cloudfs_oper.write = &writeCallback;
     cloudfs_oper.truncate = &truncateCallback;
     cloudfs_oper.unlink = &unlinkCallback;
-    cloudfs_oper.flush = &flushCallback;
     cloudfs_oper.rename = &renameCallback;
     cloudfs_oper.statfs = &statfsCallback;
-    cloudfs_oper.utime = &utimeCallback;
+    cloudfs_oper.utimens = &utimensCallback;
     cloudfs_oper.mknod = &mknodCallback;
     cloudfs_oper.chmod = &chmodCallback;
 

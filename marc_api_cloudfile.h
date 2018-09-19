@@ -56,8 +56,8 @@ public:
     std::string getHash() const;
     void setHash(const std::string &value);
 
-    uint64_t getMtime() const;
-    void setMtime(const uint64_t &value);
+    time_t getMtime() const;
+    void setMtime(const time_t &value);
 
     uint64_t getSize() const;
     void setSize(const uint64_t &value);
@@ -71,7 +71,7 @@ private:
     std::string home;       // full remote path on server (with fname)
     std::string name;       // name of file
     std::string hash;       // hash of file
-    uint64_t mtime;         // modification time
+    time_t mtime;           // modification time
     uint64_t size;          // size of file
     std::string virusScan;  // "pass" usually
 };

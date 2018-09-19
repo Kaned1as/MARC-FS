@@ -28,24 +28,13 @@
 class MarcRestClient;
 
 /**
- * @brief The MarcNode class - base cache node for any filesystem entry
+ * @brief The MarcNode class - base node for any filesystem entry
  */
 class MarcNode
 {
 public:
     MarcNode();
     virtual ~MarcNode();
-
-    void setMtime(time_t time);
-
-    virtual bool exists() const;
-
-    /**
-     * @brief fillStats - fills stat struct with info about the file.
-     *        Use if exists() call returns `true`
-     * @param stbuf - struct stat
-     */
-    virtual void fillStats(struct stat *stbuf) const;
 
     /**
      * @brief rename - rename file from old path to new. This operation

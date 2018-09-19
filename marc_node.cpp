@@ -18,9 +18,7 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <fuse.h>
-
-#include "marc_api.h"
+#include "marc_rest_client.h"
 #include "marc_node.h"
 #include "utils.h"
 
@@ -34,21 +32,6 @@ MarcNode::MarcNode()
 MarcNode::~MarcNode()
 {
 
-}
-
-bool MarcNode::exists() const
-{
-    return true;
-}
-
-void MarcNode::fillStats(struct stat *stbuf) const
-{
-    if (!exists())
-        throw std::invalid_argument("Tried to fill stats from non-existing file!");
-
-    auto ctx = fuse_get_context();
-    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
-    stbuf->st_gid = ctx->gid;
 }
 
 void MarcNode::rename(MarcRestClient *client, string oldPath, string newPath)

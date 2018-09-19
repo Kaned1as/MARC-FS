@@ -18,55 +18,72 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "mru_metadata.h"
+#include "mru_cache.h"
 
 #include "marc_api_cloudfile.h"
 
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
-#include "marc_dummy_node.h"
 
 using namespace std;
 
-template<typename T>
-T* MruData::getNode(string path) {
+static void fillStat(struct stat *stbuf, const CloudFile *cf) {
+    auto ctx = fuse_get_context();
+    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
+    stbuf->st_gid = ctx->gid;
+
+    if (cf->getType() == CloudFile::File) {
+        stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
+        stbuf->st_nlink = 1;
+    } else {
+        stbuf->st_mode = S_IFDIR | 0700;
+        stbuf->st_nlink = 2;
+    }
+
+    stbuf->st_size = static_cast<off_t>(cf->getSize()); // offset is 32 bit on x86 platforms
+    stbuf->st_blksize = 4096;
+    stbuf->st_blocks = cf->getSize() / 512 + 1;
+#ifndef __APPLE__
+    stbuf->st_mtim.tv_sec = cf->getMtime();
+#else
+    stbuf->st_mtimespec.tv_sec = mtime;
+#endif
+}
+
+static void emptyStat(struct stat *stbuf, int type) {
+    auto ctx = fuse_get_context();
+    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
+    stbuf->st_gid = ctx->gid;
+
+    if (type == S_IFREG) {
+        stbuf->st_mode = S_IFREG | 0600;
+        stbuf->st_nlink = 1;
+    } else {
+        stbuf->st_mode = S_IFDIR | 0700;
+        stbuf->st_nlink = 2;
+    }
+
+    stbuf->st_size = 0;
+    stbuf->st_blksize = 4096;
+    stbuf->st_blocks = 1;
+#ifndef __APPLE__
+    stbuf->st_mtim.tv_sec = time(nullptr);
+#else
+    stbuf->st_mtimespec.tv_sec = time(nullptr);
+#endif
+}
+
+CacheNode* MruMetadataCache::getNode(string path) {
     RwLock lock(cacheLock);
     auto it = cache.find(path);
     if (it != cache.end()) {
-        T *node = dynamic_cast<T*>(it->second.get());
-        if (!node)
-            throw invalid_argument("Expected another type in node " + path);
-
-        return node;
+       return it->second.get();
     }
 
     return nullptr;
 }
 
-// instantiations
-template MarcNode* MruData::getNode(string path);
-template MarcFileNode* MruData::getNode(string path);
-template MarcDirNode* MruData::getNode(string path);
-template MarcDummyNode* MruData::getNode(string path);
-
-template<typename T>
-T* MruData::create(string path) {
-    lock_guard<RwMutex> lock(cacheLock);
-    auto it = cache.find(path);
-    if (it != cache.end() && it->second->exists()) // something is already present in cache at this path!
-        throw invalid_argument("Cache already contains node at path " + path);
-
-    auto node = new T();
-    cache[path] = unique_ptr<T>(node);
-    return node;
-}
-
-// instantiations
-template MarcFileNode* MruData::create<MarcFileNode>(string path);
-template MarcDirNode* MruData::create<MarcDirNode>(string path);
-template MarcDummyNode* MruData::create<MarcDummyNode>(string path);
-
-void MruData::putCacheStat(string path, const CloudFile *cf) {
+void MruMetadataCache::putCacheStat(string path, const CloudFile *cf) {
     lock_guard<RwMutex> lock(cacheLock);
 
     auto it = cache.find(path);
@@ -75,57 +92,49 @@ void MruData::putCacheStat(string path, const CloudFile *cf) {
 
     if (!cf) {
         // mark non-existing
-        cache[path] = make_unique<MarcDummyNode>();
+        cache[path] = make_unique<CacheNode>();
         return;
     }
 
-    MarcNode *node;
-    switch (cf->getType()) {
-        case CloudFile::File: {
-            auto file = new MarcFileNode;
-            file->setSize(cf->getSize());
-            file->setMtime(static_cast<time_t>(cf->getMtime()));
-            node = file;
-            break;
-        }
-        case CloudFile::Directory: {
-            node = new MarcDirNode;
-            break;
-        }
-    }
-    cache[path] = unique_ptr<MarcNode>(node);
+    auto file = new CacheNode;
+    fillStat(&file->stbuf, cf);
+    file->exists = true;
+
+    cache[path] = unique_ptr<CacheNode>(file);
 }
 
-int MruData::purgeCache(string path) {
+void MruMetadataCache::putCacheStat(string path, int type)
+{
+    auto file = new CacheNode;
+
+    if (type == S_IFDIR || type == S_IFREG) {
+        emptyStat(&file->stbuf, type);
+        file->exists = true;
+    }
+
+    cache[path] = unique_ptr<CacheNode>(file);
+}
+
+void MruMetadataCache::purgeCache(string path) {
     lock_guard<RwMutex> lock(cacheLock);
     auto it = cache.find(path);
 
-    // node doesn't exist
-    if (it == cache.end())
-        return 0;
-
-    MarcFileNode* node = dynamic_cast<MarcFileNode*>(it->second.get());
-    if (node && node->isOpen()) {
-        // we can't delete a file if it's open, should wait when it's closed
-        // this should actually never happen
-        // fuse will handle this situation before us (hiding file)
-        return -EINPROGRESS;
-    }
-
-    cache.erase(it);
-    return 0;
+    if (it != cache.end())
+        cache.erase(it);
 }
 
-void MruData::renameCache(string oldPath, string newPath)
+void MruMetadataCache::renameCache(string oldPath, string newPath, bool reset)
 {
     lock_guard<RwMutex> lock(cacheLock);
     cache[newPath].swap(cache[oldPath]);
-    cache[oldPath].reset(new MarcDummyNode);
+    if (reset) {
+        cache[oldPath].reset(new CacheNode);
+    }
 
     // FIXME: moving dirs moves all their content with them!
 }
 
-bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
+bool MruMetadataCache::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
 {
     // we store cache in sorted map, this means we can find dir contents
     // by finding itself and promoting iterator further
@@ -135,12 +144,10 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
         return false; // not found in cache
 
     // make sure we did readdir on that path previously
-    const auto dir = dynamic_cast<MarcDirNode*>(it->second.get());
-    if (!dir)
-        throw invalid_argument("Node at requested path is not a dir!");
+    const auto dir = it->second.get();
 
-    if (!dir->isCached())
-        return false;
+    if (!dir->dir_cached)
+        return false; // readdir wasn't performed
 
     // root dir is special, e.g.
     // "/" -> "/" but "/folder" -> "/folder/"
@@ -172,16 +179,14 @@ bool MruData::tryFillDir(string path, void *dirhandle, fuse_fill_dir_t filler)
         if (it->first.find(nestedPath) != 0) // we moved to other entries, break
             break;
 
-        if (!it->second->exists())
+        if (!it->second->exists)
             continue; // skip negative nodes
 
         string innerPath = it->first.substr(nestedPath.size());
         if (innerPath.find('/') != string::npos)
             continue; // skip nested directories
 
-        struct stat stats = {};
-        it->second->fillStats(&stats);
-        filler(dirhandle, innerPath.data(), &stats, 0);
+        filler(dirhandle, innerPath.data(), &it->second->stbuf, 0, (fuse_fill_dir_flags) 0);
     }
 
     return true;

@@ -19,13 +19,13 @@
  */
 
 #include "gtest/gtest.h"
-#include "../marc_api.h"
+#include "../marc_rest_client.h"
 #include "../memory_storage.h"
 
 using namespace std;
 
 // template instantiation declarations
-extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, size_t start, size_t count);
+extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count);
 extern template void MarcRestClient::download(string remotePath, AbstractStorage& target);
 
 MarcRestClient* setUpMrc() {

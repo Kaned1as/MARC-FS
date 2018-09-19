@@ -18,45 +18,35 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <fuse.h>
 #include <algorithm>
 
-#include "marc_api.h"
-#include "mru_metadata.h"
+#include "marc_rest_client.h"
+#include "mru_cache.h"
 #include "marc_file_node.h"
 #include "memory_storage.h"
 #include "file_storage.h"
 
 using namespace std;
 
-extern MruData fsMetadata;
+extern MruMetadataCache fsCache;
 
 // template instantiation declarations
-extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, size_t start, size_t count);
+extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count);
 extern template void MarcRestClient::download(string remotePath, AbstractStorage& target);
 
 MarcFileNode::MarcFileNode()
 {
-    if (fsMetadata.cacheDir.empty()) {
+    if (fsCache.cacheDir.empty()) {
         cachedContent.reset(new MemoryStorage);
     } else {
         cachedContent.reset(new FileStorage);
     }
 }
 
-void MarcFileNode::fillStats(struct stat *stbuf) const
+MarcFileNode::MarcFileNode(CacheNode *cache) : MarcFileNode()
 {
-    MarcNode::fillStats(stbuf);
-    stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
-    stbuf->st_nlink = 1;
-    stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
-    stbuf->st_blksize = 4096;
-    stbuf->st_blocks = getSize() / 512 + 1;
-#ifndef __APPLE__
-    stbuf->st_mtim.tv_sec = mtime;
-#else
-    stbuf->st_mtimespec.tv_sec = mtime;
-#endif
+    oldFileSize = cache->getSize();
+    mtime = cache->getMtime();
 }
 
 void MarcFileNode::open(MarcRestClient *client, string path)
@@ -65,8 +55,7 @@ void MarcFileNode::open(MarcRestClient *client, string path)
     unique_lock<mutex> guard(netMutex);
 
     if (opened) {
-        // already opened by some other thread/process,
-        // no need to download or init
+        // shouldn't happen
         return;
     }
 
@@ -74,16 +63,11 @@ void MarcFileNode::open(MarcRestClient *client, string path)
     cachedContent->open();
     opened = true;
 
-    if (newlyCreated) {
-        // do nothing, await for `write`s
-        return;
-    }
-
     // not a new file, need to download
-    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+    if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file
-        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
-        for (size_t idx = 0; idx < partCount; ++idx) {
+        off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
+        for (off_t idx = 0; idx < partCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->download(extendedPathname, *cachedContent); // append part to current cache
         }
@@ -100,14 +84,14 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
     unique_lock<mutex> guard(netMutex);
 
     // skip unchanged files
-    if (!dirty && !newlyCreated)
+    if (!dirty)
         return;
 
     // cachedContent.size() now holds current size, fileSize holds old size
-    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+    if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // old one was compound file - delete old parts
-        size_t oldPartCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
-        for (size_t idx = 0; idx < oldPartCount; ++idx) {
+        off_t oldPartCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (off_t idx = 0; idx < oldPartCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->remove(extendedPathname);
         }
@@ -118,9 +102,9 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
 
     if (cachedContent->size() > MARCFS_MAX_FILE_SIZE) {
         // new one is compound - upload new parts
-        size_t partCount = (cachedContent->size() / MARCFS_MAX_FILE_SIZE) + 1;
-        size_t offset = 0;
-        for (size_t idx = 0; idx < partCount; ++idx) {
+        off_t partCount = (cachedContent->size() / MARCFS_MAX_FILE_SIZE) + 1;
+        off_t offset = 0;
+        for (off_t idx = 0; idx < partCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->upload(extendedPathname, *cachedContent, offset, MARCFS_MAX_FILE_SIZE);
             offset += MARCFS_MAX_FILE_SIZE;
@@ -132,7 +116,7 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
 
     // cleanup
     dirty = false;
-    newlyCreated = false;
+    oldFileSize = cachedContent->size();
 }
 
 int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes)
@@ -145,17 +129,17 @@ int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
     int res = cachedContent->write(buf, size, offsetBytes);
     if (res > 0) {
         dirty = true;
-        setMtime(time(nullptr));
+        mtime = time(nullptr);
     }
     return res;
 }
 
 void MarcFileNode::remove(MarcRestClient *client, string path)
 {
-    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+    if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, remove each part
-        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
-        for (size_t idx = 0; idx < partCount; ++idx) {
+        off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (off_t idx = 0; idx < partCount; ++idx) {
             string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
             client->remove(extendedPathname); // append part to current cache
         }
@@ -167,10 +151,10 @@ void MarcFileNode::remove(MarcRestClient *client, string path)
 
 void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath)
 {
-    if (fileSize > MARCFS_MAX_FILE_SIZE) {
+    if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, move each part
-        size_t partCount = (fileSize / MARCFS_MAX_FILE_SIZE) + 1;
-        for (size_t idx = 0; idx < partCount; ++idx) {
+        off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
+        for (off_t idx = 0; idx < partCount; ++idx) {
             string oldExtPathname = string(oldPath) + MARCFS_SUFFIX + to_string(idx);
             string newExtPathname = string(newPath) + MARCFS_SUFFIX + to_string(idx);
             client->rename(oldExtPathname, newExtPathname);
@@ -185,8 +169,7 @@ void MarcFileNode::truncate(off_t size)
 {
     cachedContent->truncate(size);
     // truncate doesn't open file, set size accordingly
-    fileSize = static_cast<size_t>(size);
-    mtime = time(nullptr);
+    oldFileSize = size;
     dirty = true;
 }
 
@@ -194,41 +177,27 @@ void MarcFileNode::release()
 {
     // this is called after all threads released the file
     unique_lock<mutex> guard(netMutex);
-    fileSize = cachedContent->size(); // set cached size to last content size before clearing
+    oldFileSize = cachedContent->size(); // set cached size to last content size before clearing
     cachedContent->clear(); // forget contents of a node
     opened = false;
 }
 
-void MarcFileNode::setSize(size_t size)
+off_t MarcFileNode::getSize() const
 {
-    this->fileSize = size;
+    if (!cachedContent->empty())
+        return cachedContent->size();
+
+    return oldFileSize;
+}
+
+time_t MarcFileNode::getMtime() const
+{
+    return mtime;
 }
 
 void MarcFileNode::setMtime(time_t time)
 {
-    this->mtime = time;
-}
-
-AbstractStorage& MarcFileNode::getCachedContent()
-{
-    return *cachedContent.get();
-}
-
-size_t MarcFileNode::getSize() const
-{
-    // guard against trying to get size for getattr call when release is in progress
-    unique_lock<mutex> guard(netMutex);
-
-    if (!cachedContent->empty())
-        return cachedContent->size();
-
-    return fileSize;
-}
-
-void MarcFileNode::setNewlyCreated(bool value)
-{
-    newlyCreated = value;
-    mtime = time(nullptr);
+    mtime = time;
 }
 
 bool MarcFileNode::isOpen() const

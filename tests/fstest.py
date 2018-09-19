@@ -195,8 +195,8 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         time.sleep(1)
         with open(plink_fname, 'r') as f:
             plink_text = f.read()
-            self.assertTrue('https://cloud.mail.ru/public/' in plink_text, 'Public link does not contain url!')
-            self.assertTrue(fname.split('/')[-1] in plink_text, 'Public link does not contain file name!')
+            self.assertIn('https://cloud.mail.ru/public/', plink_text, 'Public link does not contain url!')
+            self.assertIn(fname.split('/')[-1], plink_text, 'Public link does not contain file name!')
 
     # Test to check issue https://gitlab.com/Kanedias/MARC-FS/issues/24 is resolved
     # The problem was that in tryFillDir we find dir in sorted cache and then iterate next,

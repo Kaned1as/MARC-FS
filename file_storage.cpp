@@ -24,12 +24,12 @@
 #include <cstring>
 
 #include "file_storage.h"
-#include "mru_metadata.h"
+#include "mru_cache.h"
 #include "utils.h"
 
 using namespace std;
 
-extern MruData fsMetadata;
+extern MruMetadataCache fsCache;
 
 // definition
 std::atomic_ulong FileStorage::counter;
@@ -43,7 +43,7 @@ void FileStorage::open()
 {
     // get unique file name
     string name = to_string(counter++);
-    filename = fsMetadata.cacheDir + '/' + name;
+    filename = fsCache.cacheDir + '/' + name;
 
     // open temporary file
     data.open(filename, ios::out | ios::in | ios::trunc | ios::binary);
@@ -66,13 +66,13 @@ bool FileStorage::empty()
     return true;
 }
 
-size_t FileStorage::size()
+off_t FileStorage::size()
 {
     if (!data.is_open())
         return 0;
 
     data.seekg(0, ios::end);
-    return static_cast<size_t>(data.tellg());
+    return data.tellg();
 }
 
 int FileStorage::read(char *buf, size_t size, uint64_t offset)

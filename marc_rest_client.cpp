@@ -24,7 +24,7 @@
 
 #include "curl_header.h"
 
-#include "marc_api.h"
+#include "marc_rest_client.h"
 #include "abstract_storage.h"
 
 #define NV_PAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
@@ -426,12 +426,12 @@ string MarcRestClient::share(string remotePath)
 template <typename Container>
 struct ReadData {
     /*const*/ Container * const content; // content to read from
-    size_t offset; // current offset of read
-    size_t count; // maximum offset - can be lower than content.size()
+    off_t offset; // current offset of read
+    off_t count; // maximum offset - can be lower than content.size()
 };
 
 template<typename Container>
-void MarcRestClient::upload(string remotePath, Container &body, size_t start, size_t count)
+void MarcRestClient::upload(string remotePath, Container &body, off_t start, off_t count)
 {
     static_assert(is_same<Container, vector<char>>::value ||
                   is_same<Container, AbstractStorage>::value, "Container should be of compatible container type");
@@ -450,12 +450,12 @@ void MarcRestClient::upload(string remotePath, Container &body, size_t start, si
 
     // fileupload part
     curl_form nameForm;
-    size_t realSize = min(body.size() - start, count); // size to transfer
+    off_t realSize = min(body.size() - start, count); // size to transfer
     ReadData<Container> ptr {&body, start, min(body.size(), start + count)};
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
                  curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
-                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, static_cast<long>(realSize)));
+                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, realSize));
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
 
@@ -530,6 +530,6 @@ void MarcRestClient::download(string remotePath, Container& target)
 }
 
 // template instantiations
-template void MarcRestClient::upload(string remotePath, AbstractStorage &body, size_t start, size_t count);
+template void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count);
 template void MarcRestClient::download(string remotePath, AbstractStorage& target);
 template void MarcRestClient::performGet(AbstractStorage &target);

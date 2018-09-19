@@ -30,23 +30,16 @@ const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 
 // global MruData instance definition
-MruData fsMetadata;
+MruMetadataCache fsCache;
 
 using namespace std;
-
-// explicit instantiation declarations
-extern template MarcNode* MruData::getNode(string);
-extern template MarcFileNode* MruData::getNode(string);
-extern template MarcDirNode* MruData::getNode(string);
-extern template MarcDirNode* MruData::create<MarcDirNode>(string);
-extern template MarcFileNode* MruData::create<MarcFileNode>(string);
 
 static int doWithRetry(std::function<int(MarcRestClient *)> what) {
     uint retries = 3;
 
     while (retries > 0) {
         try {
-            auto client = fsMetadata.clientPool.acquire();
+            auto client = fsCache.clientPool.acquire();
             return what(client.get());
         } catch (MailApiException &exc) {
             cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
@@ -133,13 +126,13 @@ int handleLinks(string filePath, MarcFileNode* file) {
     string origPath = match[1];
     // string linkType = match[3];
 
-    auto origFile = fsMetadata.getNode<MarcFileNode>(origPath);
+    auto origFile = fsCache.getNode(origPath);
     string link;
     if (origFile->getSize() > MARCFS_MAX_FILE_SIZE) {
         // it's compound, retrieve links for each part
-        size_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
+        off_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
         doWithRetry([&](MarcRestClient *client) -> int {
-            for (size_t idx = 0; idx < partCount; ++idx) {
+            for (off_t idx = 0; idx < partCount; ++idx) {
                 string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
                 link += extendedPath + ": ";
                 link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
@@ -158,50 +151,66 @@ int handleLinks(string filePath, MarcFileNode* file) {
     file->truncate(0);
     file->write(link.data(), link.size(), 0);
 
+    // update cache for the link file
+    auto node = fsCache.getNode(filePath);
+    node->setSize(file->getSize());
+    node->setMtime(file->getMtime());
+
     return 0;
 }
 
-int utimeCallback(const char */*path*/, utimbuf */*utime*/)
+int utimensCallback(const char *path, const struct timespec time[2], struct fuse_file_info *fi)
 {
     // API doesn't support utime, only seconds
-    // stub
+
+    if (fi && fi->fh) {
+        // it's opened file, apply mtime
+        auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
+        file->setMtime(time[1].tv_sec);
+    }
+
+    // update in cache
+    auto node = fsCache.getNode(path);
+    if (node) {
+        node->setMtime(time[1].tv_sec);
+        return 0;
+    }
+
+    // not in opened, not in cache, skip the call
     return 0;
 }
 
-int chmodCallback(const char */*path*/, mode_t /*mode*/)
+int chmodCallback(const char */*path*/, mode_t /*mode*/, fuse_file_info */*fi*/)
 {
     // stub, no access rights for your own cloud
     return 0;
 }
 
-void * initCallback(fuse_conn_info *conn)
+void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
 {
-#ifndef __APPLE__ // APPLE doesn't yet have this in osxfuse
-    conn->want |= FUSE_CAP_BIG_WRITES; // writes more than 4096
-    conn->async_read = 0;
-#endif
+    conn->want |= FUSE_CAP_ASYNC_READ;
     return nullptr;
 }
 
-int getattrCallback(const char *path, struct stat *stbuf)
+int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info */*fi*/)
 {
     // retrieve path to containing dir
     string pathStr(path); // e.g. /home/1517.svg
 
     // try to retrieve it from cache
-    auto node = fsMetadata.getNode<MarcNode>(pathStr);
+    auto node = fsCache.getNode(pathStr);
     if (node) { // have this file in stat cache
-        if (!node->exists()) // we cached that this file doesn't exist previously, just repeat
+        if (!node->exists) // we cached that this file doesn't exist previously, just repeat
             return -ENOENT;
 
         // it exists, fill stat buffer
-        node->fillStats(stbuf);
+        *stbuf = node->stbuf;
         return 0;
     }
 
     if (pathStr == "/") { // special handling for root
-        auto root = fsMetadata.create<MarcDirNode>(pathStr);
-        root->fillStats(stbuf);
+        fsCache.putCacheStat(pathStr, S_IFDIR);
+        *stbuf = fsCache.getNode(pathStr)->stbuf;
         return 0;
     }
 
@@ -216,9 +225,9 @@ int getattrCallback(const char *path, struct stat *stbuf)
 
     // dir cache check - if the dir is already cached after readdir
     // and we had no results in cache above then file is nonexistent
-    auto dirNode = fsMetadata.getNode<MarcDirNode>(dirname);
-    if (dirNode && dirNode->isCached()) {
-        fsMetadata.putCacheStat(path, nullptr); // negative cache
+    auto dirNode = fsCache.getNode(dirname);
+    if (dirNode && dirNode->dir_cached) {
+        fsCache.putCacheStat(path, nullptr); // negative cache
         return -ENOENT;
     }
 
@@ -237,10 +246,10 @@ int getattrCallback(const char *path, struct stat *stbuf)
         for (CloudFile &cf : contents) {
             string fullPath = dirPath + cf.getName();
 
-            fsMetadata.putCacheStat(fullPath, &cf);
+            fsCache.putCacheStat(fullPath, &cf);
             if (cf.getName() == filename) {
                 // file found - fill statbuf
-                fsMetadata.getNode<MarcNode>(pathStr)->fillStats(stbuf);
+                *stbuf = fsCache.getNode(pathStr)->stbuf;
                 found = true;
             }
         }
@@ -249,7 +258,7 @@ int getattrCallback(const char *path, struct stat *stbuf)
             return 0;
 
         // not found - put negative mark in cache
-        fsMetadata.putCacheStat(path, nullptr);
+        fsCache.putCacheStat(path, 0);
         return -ENOENT;
     });
 }
@@ -281,25 +290,35 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 }
 
-int openCallback(const char *path, struct fuse_file_info */*fi*/)
+int openCallback(const char *path, struct fuse_file_info *fi)
 {
-    // file should already be present as FUSE does `getattr` call prior to open
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
     return doWithRetry([&](MarcRestClient *client) -> int {
+        // use unique_ptr so if open() throws node will be deleted safely
+        auto node = fsCache.getNode(path);
+        auto file = make_unique<MarcFileNode>(node);
         file->open(client, path);
+
+        // no errors
+        fi->fh = reinterpret_cast<uintptr_t>(file.release());
         return 0;
     });
 }
 
-int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t /*offset*/, struct fuse_file_info */*fi*/)
+int opendirCallback(const char *path, fuse_file_info *fi)
 {
-    filler(dirhandle, ".", nullptr, 0);
-    filler(dirhandle, "..", nullptr, 0);
+    fi->fh = reinterpret_cast<uintptr_t>(new MarcDirNode);
+    return 0;
+}
+
+int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info */*fi*/, enum fuse_readdir_flags /*flags*/)
+{
+    filler(dirhandle, ".", nullptr, 0, (fuse_fill_dir_flags) 0);
+    filler(dirhandle, "..", nullptr, 0, (fuse_fill_dir_flags) 0);
 
     string pathStr(path); // e.g. /directory or /
 
     // try cache first
-    if (fsMetadata.tryFillDir(pathStr, dirhandle, filler))
+    if (fsCache.tryFillDir(pathStr, dirhandle, filler))
         return 0;
 
     return doWithRetry([&](MarcRestClient *client) -> int {
@@ -310,38 +329,51 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         for (const CloudFile &cf : contents) {
             string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
-            struct stat stbuf = {};
-            fsMetadata.putCacheStat(fullPath, &cf);
-            fsMetadata.getNode<MarcNode>(fullPath)->fillStats(&stbuf);
-            filler(dirhandle, cf.getName().data(), &stbuf, 0);
+            fsCache.putCacheStat(fullPath, &cf);
+            filler(dirhandle, cf.getName().data(), &fsCache.getNode(fullPath)->stbuf, 0, (fuse_fill_dir_flags) 0);
         }
 
         // confirm readdir cache
-        auto node = fsMetadata.getNode<MarcDirNode>(pathStr);
-        node->setCached(true);
+        auto node = fsCache.getNode(pathStr);
+        node->dir_cached = true;
         return 0;
     });
 }
 
-int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info */*fi*/)
+
+int releasedirCallback(const char *path, fuse_file_info *fi)
 {
+    auto file = reinterpret_cast<MarcDirNode *>(fi->fh);
+    delete file;
+    return 0;
+}
+
+int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+{
+    auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
 
     return file->read(buf, size, offsetBytes);
 }
 
-int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info */*fi*/)
+int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info *fi)
 {
+    auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
-    return file->write(buf, size, offsetBytes);
+    int res = file->write(buf, size, offsetBytes);
+
+    // update cache size
+    auto node = fsCache.getNode(path); // should be present, we did mknod for it
+    node->setMtime(file->getMtime());
+    node->setSize(file->getSize());
+
+    return res;
 }
 
 
-int flushCallback(const char *path, struct fuse_file_info */*fi*/)
+int flushCallback(const char *path, struct fuse_file_info *fi)
 {
-    auto file = fsMetadata.getNode<MarcFileNode>(path); // present as we opened it earlier
+    auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
 
     // handle possible link files
     int res = handleLinks(path, file);
@@ -354,10 +386,11 @@ int flushCallback(const char *path, struct fuse_file_info */*fi*/)
     });
 }
 
-int releaseCallback(const char *path, struct fuse_file_info */*fi*/)
+int releaseCallback(const char *path, struct fuse_file_info *fi)
 {
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
+    auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     file->release();
+    delete file;
 
     return 0;
 }
@@ -366,7 +399,7 @@ int mkdirCallback(const char *path, mode_t /*mode*/)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->mkdir(path);
-        fsMetadata.create<MarcDirNode>(path);
+        fsCache.putCacheStat(path, S_IFDIR);
         return 0;
     });
 }
@@ -379,7 +412,8 @@ int rmdirCallback(const char *path)
             return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
         client->remove(path);
-        return fsMetadata.purgeCache(path);
+        fsCache.purgeCache(path);
+        return 0;
     });
 }
 
@@ -388,6 +422,10 @@ int rmdirCallback(const char *path)
  */
 int unlinkCallback(const char *path)
 {
+    auto node = fsCache.getNode(path);
+    if (!node || !node->exists)
+        return -ENOENT;
+
     // IMPORTANT!
     // if a file is opened (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
     // calls QUEUE PATH on this node and waits till the file is released
@@ -398,48 +436,85 @@ int unlinkCallback(const char *path)
     // 3.          unlink file .fuse_hidden{...}
 
     return doWithRetry([&](MarcRestClient *client) -> int {
-        auto file = fsMetadata.getNode<MarcFileNode>(path);
-        file->remove(client, path);
-        return fsMetadata.purgeCache(path);
-    });
-}
 
-int renameCallback(const char *oldPath, const char *newPath)
-{
-    auto node = fsMetadata.getNode<MarcNode>(oldPath);
-    if (!node || !node->exists()) {
-        return -ENOENT;
-    }
-
-    return doWithRetry([&](MarcRestClient *client) -> int {
-        auto target = fsMetadata.getNode<MarcNode>(newPath);
-        auto targetFile = dynamic_cast<MarcFileNode*>(target);
-        if (targetFile) {
-            // we have file here, remove it
-            targetFile->remove(client, newPath);
-        }
-
-        // if we write new file and try to rename it while flushing to cloud
-        // it will fail here with -EIO as actual addition happens only after file is uploaded
-        node->rename(client, oldPath, newPath);
-        fsMetadata.renameCache(oldPath, newPath);
+        MarcFileNode file(node);
+        file.remove(client, path);
+        fsCache.purgeCache(path);
         return 0;
     });
 }
 
-int truncateCallback(const char *path, off_t size)
+int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
 {
-    auto file = fsMetadata.getNode<MarcFileNode>(path);
-    file->truncate(size);
-    return 0;
+    auto node = fsCache.getNode(oldPath);
+    if (!node || !node->exists) {
+        return -ENOENT;
+    }
+
+    MarcFileNode sourceFile(node);
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto target = fsCache.getNode(newPath);
+        if (target && target->exists) {
+            MarcFileNode targetFile(target);
+
+            if (flags & RENAME_NOREPLACE) {
+                // file exists and replacement is not allowed
+                return -EEXIST;
+            }
+
+            if (flags & RENAME_EXCHANGE) {
+                // exchange source and target
+                targetFile.rename(client, newPath, string(newPath) + ".marcfs-temp");
+                sourceFile.rename(client, oldPath, newPath);
+                targetFile.rename(client, string(newPath) + ".marcfs-temp", oldPath);
+                fsCache.renameCache(oldPath, newPath, false);
+                return 0;
+            }
+
+            // it's not exchange and replace is permitted, delete the file
+            targetFile.remove(client, newPath);
+        }
+
+        // if we write new file and try to rename it while flushing to cloud
+        // it will fail here with -EIO as actual addition happens only after file is uploaded
+        sourceFile.rename(client, oldPath, newPath);
+        fsCache.renameCache(oldPath, newPath);
+        return 0;
+    });
+}
+
+int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
+{
+    if (fi && fi->fh) {
+        // file is opened, truncate it
+        auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
+        file->truncate(size);
+        return 0;
+    }
+
+    // file is not open, just reupload it with
+    return doWithRetry([&](MarcRestClient *client) -> int {
+        auto cache = fsCache.getNode(path);
+
+        // imitate reupload
+        MarcFileNode tempFile(cache);
+        tempFile.open(client, path);
+        tempFile.truncate(size);
+        tempFile.flush(client, path);
+        tempFile.release();
+
+        cache->setSize(tempFile.getSize());
+        cache->setMtime(tempFile.getMtime());
+        return 0;
+    });
+
 }
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->create(path);
-        auto created = fsMetadata.create<MarcFileNode>(path);
-        created->setNewlyCreated(true);
+        fsCache.putCacheStat(path, S_IFREG);
         return 0;
     });
 }

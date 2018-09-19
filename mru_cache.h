@@ -21,14 +21,14 @@
 #ifndef MRU_METADATA_H
 #define MRU_METADATA_H
 
-#include <fuse.h>
+#include <fuse3/fuse.h>
 
 #include <shared_mutex>
 #include <vector>
 
 #include "object_pool.h"
-#include "marc_api.h"
-#include "marc_node.h"
+#include "marc_rest_client.h"
+#include "marc_file_node.h"
 
 class CloudFile;
 
@@ -40,6 +40,62 @@ typedef std::shared_timed_mutex RwMutex;
 typedef std::shared_lock<RwMutex> RwLock;
 #endif
 
+static time_t retrieveMtime(struct stat &stbuf) {
+#ifndef __APPLE__
+    return stbuf.st_mtim.tv_sec;
+#else
+    return stbuf.st_mtimespec.tv_sec;
+#endif
+}
+
+static void applyMtime(struct stat &stbuf, time_t mtime) {
+#ifndef __APPLE__
+    stbuf.st_mtim.tv_sec = mtime;
+#else
+    stbuf.st_mtimespec.tv_sec = mtime;
+#endif
+}
+
+struct CacheNode {
+    /**
+
+     * @brief stbuf = Stat cache, main cache entity
+     *
+     */
+    struct stat stbuf = {};
+
+    /**
+     * @brief exists - by default, cache node doesn't exist
+     */
+    bool exists = false;
+
+    /**
+     * @brief dir_cached - true if we this cache node is a dir and was read at least once
+     */
+    bool dir_cached = false;
+
+    /**
+     * @brief cached_since - marks time when this node was created
+     */
+    time_t cached_since = time(nullptr);
+
+    inline off_t getSize() {
+        return stbuf.st_size;
+    }
+
+    inline void setSize(off_t size) {
+        stbuf.st_size = size;
+    }
+
+    inline time_t getMtime() {
+        return retrieveMtime(stbuf);
+    }
+
+    inline void setMtime(time_t mtime) {
+        applyMtime(stbuf, mtime);
+    }
+};
+
 /**
  * @brief The MruData class - filesystem-wide metadata and caching for the mounted filesystem.
  *
@@ -47,13 +103,9 @@ typedef std::shared_lock<RwMutex> RwLock;
  * Each file-altering operation obtains a lock on specified file. In addition, cache lock
  * is taken each time new node appears/disappears/opened.
  *
- * @note It is implied that you do not alter any information on the cloud while
- *       it is mounted somewhere via MARC-FS as cache is built only once and then
- *       considered immutable.
- *
  * @see fuse_hooks.cpp
   */
-class MruData {
+class MruMetadataCache {
 public:
     ObjectPool<MarcRestClient> clientPool;
     /**
@@ -74,14 +126,13 @@ public:
      * @param path - path to a file
      * @return ptr to obtained file node
      */
-    template<typename T>
-    T* getNode(std::string path);
+    CacheNode* getNode(std::string path);
 
     /**
      * @brief putCacheStat - write stat information to associated file/dir
      * @note this takes/releases cache lock
      * @param path path to obtain node for
-     * @param cf stat to apply
+     * @param cf stat to apply, can be nullptr for negative cache
      */
     void putCacheStat(std::string path, const CloudFile *cf);
 
@@ -90,22 +141,21 @@ public:
      * @note this takes/releases cache lock
      * @param path path to create node for
      */
-    template<typename T>
-    T* create(std::string path);
+    void putCacheStat(std::string path, int type);
 
     /**
      * @brief purgeCache - erase cache at specified path
      * @note this takes/releases cache lock
      * @param path path to clear cache for
      */
-    int purgeCache(std::string path);
+    void purgeCache(std::string path);
 
     /**
-     * @brief renameCache - rename file in cache- leave everything intact
+     * @brief renameCache - rename file in cache - leave everything other intact
      * @param oldPath - old path to file
      * @param newPath - new path to file
      */
-    void renameCache(std::string oldPath, std::string newPath);
+    void renameCache(std::string oldPath, std::string newPath, bool reset = true);
 
     /**
      * @brief tryFillDir - tries to fill FUSE directory handle with cached content
@@ -121,7 +171,8 @@ private:
     /**
      * @brief cache field - cached filenodes
      */
-    std::map<std::string, std::unique_ptr<MarcNode>> cache;
+    std::map<std::string, std::unique_ptr<CacheNode>> cache;
+
     /**
      * @brief cacheLock - lock for changing cache structure
      */
