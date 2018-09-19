@@ -26,6 +26,11 @@
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
 
+// man renameat2 - these constants are not present in glibc < 2.27
+# define RENAME_NOREPLACE (1 << 0)
+# define RENAME_EXCHANGE (1 << 1)
+# define RENAME_WHITEOUT (1 << 2)
+
 const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 

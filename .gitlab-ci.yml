@@ -13,73 +13,81 @@ stages:
   - arch build
   - arch fstest
 
-build on ubuntu:
-  image: ubuntu
-  stage: ubuntu build
-  dependencies: []
-  before_script: &common_compile_debian
-    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
-  script: &common_script
-    - mkdir build
-    - cd build
-    - cmake ..
-    - make -j$(nproc)
-    - ./apitest
-  artifacts: &common_artifacts
-    expire_in: 1 day
-    paths:
-      - build/marcfs
-      
-deb package for ubuntu:
-  image: ubuntu
-  stage: ubuntu build
-  dependencies: []
-  before_script:
-    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
-  script:
-    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
-    - export DEBEMAIL="adonai@xaker.ru"
-    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
-    - dh_make --packagename marcfs_0.4 --copyright gpl3 --single --createorig --yes
-    - cp README.md debian/README.Debian
-    - dpkg-buildpackage -us -uc -j$(nproc)
-    - cp ../*.deb .
-  artifacts:
-    paths:
-      - "*.deb"
+.binary_artifact: &common_artifacts
+  expire_in: 1 day
+  paths:
+    - build/marcfs
 
-fstest on ubuntu:
-  image: ubuntu
-  stage: ubuntu fstest
-  dependencies:
-    - build on ubuntu
-  before_script: &common_test_debian
-    - apt-get update -qq && apt-get install -y -qq fuse libcurl3-gnutls libjsoncpp1 python3
-    - useradd --create-home fstest
-    - cp build/marcfs tests/fstest.py ~fstest
-    - "chown -R fstest: ~fstest"
-  after_script: &common_fstest_after
-    - userdel fstest
-  script: &common_fstest_script
-    - su -c 'python3 fstest.py -v' - fstest
+.build_script: &common_script
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make -j$(nproc)
+  - ./apitest
+
+.fstest_after: &common_fstest_after
+  - userdel fstest
+
+.fstest_script: &common_fstest_script
+  - su -c 'python3 fstest.py -v' - fstest
+
+#build on ubuntu:
+#  image: ubuntu
+#  stage: ubuntu build
+#  dependencies: []
+#  before_script: &common_compile_debian
+#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
+#  script: *common_script
+#  artifacts: *common_artifacts
+
+#deb package for ubuntu:
+#  image: ubuntu
+#  stage: ubuntu build
+#  dependencies: []
+#  before_script:
+#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
+#  script:
+#    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
+#    - export DEBEMAIL="adonai@xaker.ru"
+#    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
+#    - dh_make --packagename marcfs_0.4 --copyright gpl3 --single --createorig --yes
+#    - cp README.md debian/README.Debian
+#    - dpkg-buildpackage -us -uc -j$(nproc)
+#    - cp ../*.deb .
+#  artifacts:
+#    paths:
+#      - "*.deb"
+
+#fstest on ubuntu:
+#  image: ubuntu
+#  stage: ubuntu fstest
+#  dependencies:
+#    - build on ubuntu
+#  before_script: &common_test_debian
+#    - apt-get update -qq && apt-get install -y -qq fuse libcurl3-gnutls libjsoncpp1 python3
+#    - useradd --create-home fstest
+#    - cp build/marcfs tests/fstest.py ~fstest
+#    - "chown -R fstest: ~fstest"
+#  after_script: *common_fstest_after
+#  script: *common_fstest_script
 
 
-build on mint:
-  image: vcatechnology/linux-mint
-  stage: mint build
-  dependencies: []
-  before_script: *common_compile_debian
-  script: *common_script
-  artifacts: *common_artifacts
-
-fstest on mint:
-  image: vcatechnology/linux-mint
-  stage: mint fstest
-  dependencies:
-    - build on mint
-  before_script: *common_test_debian
-  after_script: *common_fstest_after
-  script: *common_fstest_script
+#build on mint:
+#  image: vcatechnology/linux-mint
+#  stage: mint build
+#  dependencies: []
+#  before_script: *common_compile_debian
+#  script: *common_script
+#  artifacts: *common_artifacts
+#
+#fstest on mint:
+#  image: vcatechnology/linux-mint
+#  stage: mint fstest
+#  dependencies:
+#    - build on mint
+#  before_script: *common_test_debian
+#  after_script: *common_fstest_after
+#  script: *common_fstest_script
 
 build on fedora:
   image: fedora
