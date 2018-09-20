@@ -1,6 +1,6 @@
 /*****************************************************************************
  *
- * Copyright (c) 2017, Oleg `Kanedias` Chernovskiy
+ * Copyright (c) 2018, Oleg `Kanedias` Chernovskiy
  *
  * This file is part of MARC-FS testing suite.
  *

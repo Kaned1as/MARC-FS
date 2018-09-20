@@ -1,6 +1,6 @@
 /*****************************************************************************
  *
- * Copyright (c) 2017, Oleg `Kanedias` Chernovskiy
+ * Copyright (c) 2018, Oleg `Kanedias` Chernovskiy
  *
  * This file is part of MARC-FS.
  *
@@ -194,6 +194,7 @@ int chmodCallback(const char */*path*/, mode_t /*mode*/, fuse_file_info */*fi*/)
 void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
 {
     conn->want |= FUSE_CAP_ASYNC_READ;
+    conn->want |= FUSE_CAP_DONT_MASK;
     return nullptr;
 }
 
