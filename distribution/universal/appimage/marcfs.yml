@@ -1,0 +1,28 @@
+app: marcfs
+
+ingredients:
+  packages:
+    - libfuse3-dev
+    - libcurl4-gnutls-dev
+    - libjsoncpp-dev
+  dist: trusty
+  sources:
+    - deb http://archive.ubuntu.com/ubuntu/ trusty main universe
+  ppas:
+    - bkryza/fuse3
+
+script:
+  - cp -v build/marcfs usr/bin
+  - cp -v graphics/marcfs.png .
+  - cat > marcfs.desktop <<EOF
+  - [Desktop Entry]
+  - Type=Application
+  - Name=MARC-FS
+  - Icon=marcfs
+  - Exec=marcfs %u
+  - Terminal=true
+  - NoDisplay=true
+  - Categories=Utility
+  - Comment=Mail.ru cloud FUSE filesystem
+  - Keywords=fuse;mailru;cloud
+  - EOF

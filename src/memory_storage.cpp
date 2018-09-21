@@ -77,9 +77,9 @@ void MemoryStorage::append(const char *buf, size_t size)
     data.insert(data.end(), tail.begin(), tail.end());
 }
 
-const char *MemoryStorage::readFully()
+string MemoryStorage::readFully()
 {
-    return &data.front();
+    return string(&data.front());
 }
 
 void MemoryStorage::clear()

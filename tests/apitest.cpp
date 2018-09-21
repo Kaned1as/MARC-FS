@@ -19,8 +19,8 @@
  */
 
 #include "gtest/gtest.h"
-#include "../marc_rest_client.h"
-#include "../memory_storage.h"
+#include "../src/marc_rest_client.h"
+#include "../src/memory_storage.h"
 
 using namespace std;
 
@@ -219,6 +219,6 @@ TEST(ApiIntegrationTesting, TestFileDownload) {
     mrc->download<AbstractStorage>("/Берег.jpg", content);
 
     EXPECT_EQ(content.size(), 723662); // Cloud default file
-    auto magicBytes = string(content.readFully(), 4);
+    auto magicBytes = content.readFully().substr(0, 4);
     EXPECT_EQ(magicBytes, "\xFF\xD8\xFF\xE1"); // JPEG magic bytes ver. 3, see wiki
 }

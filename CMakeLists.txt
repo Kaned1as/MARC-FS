@@ -1,6 +1,6 @@
 project(MARC-FS)
 cmake_minimum_required(VERSION 2.8)
-aux_source_directory(. SRC_LIST)
+aux_source_directory(src SRC_LIST)
 
 # determine, whether we want a static binary
 set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
@@ -66,7 +66,7 @@ endif()
 
 # first, run tests
 set(SRC_NO_MAIN ${SRC_LIST})
-list(REMOVE_ITEM SRC_NO_MAIN ./main.cpp)
+list(REMOVE_ITEM SRC_NO_MAIN src/main.cpp)
 add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
 target_link_libraries(apitest
     gtest_main

@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <vector>
 #include <type_traits>
+#include <string>
 
 // FreeBSD uses Clang by default, it doesn't have off_t
 // Include stdio.h where it's always defined
@@ -94,7 +95,7 @@ public:
      * @brief readFully - read data from storage fully and return it as byte buffer
      * @return pointer to retrieved data
      */
-    virtual const char* readFully() = 0;
+    virtual std::string readFully() = 0;
 
     /**
      * @brief clear - Clear all underlying systems and free associated resources.

@@ -6,8 +6,7 @@ variables:
 stages:
 #  - ubuntu build
 #  - ubuntu fstest
-#  - mint build
-#  - mint fstest
+#  - universal build
   - fedora build
   - fedora fstest
   - arch build
@@ -31,12 +30,33 @@ stages:
 .fstest_script: &common_fstest_script
   - su -c 'python3 fstest.py -v' - fstest
 
+# ------------------------ pkg2appimage doesn't work
+#appimage on ubuntu:
+#  image: ubuntu:trusty
+#  stage: universal build
+#  dependencies: []
+#  before_script: &common_compile_debian
+#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
+#    - apt-add-repository ppa:bkryza/fuse3
+#    - apt-get update -qq && apt-get install -y -qq wget git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
+#  script: *common_script
+#  after_script:
+#    - wget https://raw.githubusercontent.com/AppImage/AppImages/master/pkg2appimage
+#    - chmod u+x pkg2appimage
+#    - ./pkg2appimage distribution/universal/appimage/marcfs.yml
+#  artifacts:
+#    paths:
+#      - "*.AppImage"
+
+# ------------------------ ubuntu > trusty doesn't have fuse3
 #build on ubuntu:
 #  image: ubuntu
 #  stage: ubuntu build
 #  dependencies: []
 #  before_script: &common_compile_debian
-#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev
+#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
+#    - apt-add-repository ppa:bkryza/fuse3
+#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
 #  script: *common_script
 #  artifacts: *common_artifacts
 
@@ -45,12 +65,14 @@ stages:
 #  stage: ubuntu build
 #  dependencies: []
 #  before_script:
-#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
+#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
+#    - apt-add-repository ppa:bkryza/fuse3
+#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
 #  script:
 #    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
-#    - export DEBEMAIL="adonai@xaker.ru"
+#    - export DEBEMAIL="kanedias@xaker.ru"
 #    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
-#    - dh_make --packagename marcfs_0.4 --copyright gpl3 --single --createorig --yes
+#    - dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes
 #    - cp README.md debian/README.Debian
 #    - dpkg-buildpackage -us -uc -j$(nproc)
 #    - cp ../*.deb .
@@ -64,30 +86,14 @@ stages:
 #  dependencies:
 #    - build on ubuntu
 #  before_script: &common_test_debian
-#    - apt-get update -qq && apt-get install -y -qq fuse libcurl3-gnutls libjsoncpp1 python3
+#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
+#    - apt-add-repository ppa:bkryza/fuse3
+#    - apt-get update -qq && apt-get install -y -qq fuse3 libcurl3-gnutls libjsoncpp1 python3
 #    - useradd --create-home fstest
 #    - cp build/marcfs tests/fstest.py ~fstest
 #    - "chown -R fstest: ~fstest"
-#  after_script: *common_fstest_after
 #  script: *common_fstest_script
-
-
-#build on mint:
-#  image: vcatechnology/linux-mint
-#  stage: mint build
-#  dependencies: []
-#  before_script: *common_compile_debian
-#  script: *common_script
-#  artifacts: *common_artifacts
-#
-#fstest on mint:
-#  image: vcatechnology/linux-mint
-#  stage: mint fstest
-#  dependencies:
-#    - build on mint
-#  before_script: *common_test_debian
 #  after_script: *common_fstest_after
-#  script: *common_fstest_script
 
 build on fedora:
   image: fedora
@@ -97,7 +103,7 @@ build on fedora:
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel
   script: *common_script
   artifacts: *common_artifacts
-  
+
 rpm package for fedora:
   image: fedora
   stage: fedora build
@@ -105,11 +111,11 @@ rpm package for fedora:
   before_script: 
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel jemalloc-devel rpm-build
   script:
-    - version=$(grep Version fuse-marcfs.spec | grep -oP "\d.*")
+    - version=$(grep Version distribution/fedora/fuse-marcfs.spec | grep -oP "\d.*")
     - tar --transform "s|^|fuse-marcfs-$version/|g" -cvaf fuse-marcfs-$version.tar.bz2 *
     - mkdir -pv ~/rpmbuild/{RPMS,SRPMS,BUILD,SOURCES,SPECS,tmp}
     - mv -v fuse-marcfs-$version.tar.bz2 ~/rpmbuild/SOURCES
-    - rpmbuild -ba fuse-marcfs.spec
+    - rpmbuild -ba distribution/fedora/fuse-marcfs.spec
     - cp -v /root/rpmbuild/RPMS/*/*.rpm .
   artifacts:
     paths:
@@ -150,7 +156,7 @@ aur package for arch:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp fakeroot
     - useradd --create-home build
-    - cp PKGBUILD ~build
+    - cp distribution/archlinux/PKGBUILD ~build
   script:
     - su -c 'makepkg -s' - build
     - cp -v ~build/*.tar.xz .

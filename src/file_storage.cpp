@@ -99,7 +99,7 @@ void FileStorage::append(const char *buf, size_t size)
     data.write(buf, static_cast<streamoff>(size));
 }
 
-const char *FileStorage::readFully()
+string FileStorage::readFully()
 {
     data.seekg(0);
     std::stringstream buffer;
