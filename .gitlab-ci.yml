@@ -6,7 +6,7 @@ variables:
 stages:
 #  - ubuntu build
 #  - ubuntu fstest
-#  - universal build
+  - universal build
   - fedora build
   - fedora fstest
   - arch build
@@ -30,23 +30,22 @@ stages:
 .fstest_script: &common_fstest_script
   - su -c 'python3 fstest.py -v' - fstest
 
-# ------------------------ pkg2appimage doesn't work
-#appimage on ubuntu:
-#  image: ubuntu:trusty
-#  stage: universal build
-#  dependencies: []
-#  before_script: &common_compile_debian
-#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
-#    - apt-add-repository ppa:bkryza/fuse3
-#    - apt-get update -qq && apt-get install -y -qq wget git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
-#  script: *common_script
-#  after_script:
-#    - wget https://raw.githubusercontent.com/AppImage/AppImages/master/pkg2appimage
-#    - chmod u+x pkg2appimage
-#    - ./pkg2appimage distribution/universal/appimage/marcfs.yml
-#  artifacts:
-#    paths:
-#      - "*.AppImage"
+appimage on ubuntu:
+  image: ubuntu:trusty
+  stage: universal build
+  dependencies: []
+  before_script: &common_compile_debian
+    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
+    - apt-add-repository ppa:bkryza/fuse3
+    - apt-get update -qq && apt-get install -y -qq wget git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
+  script: *common_script
+  after_script:
+    - wget https://raw.githubusercontent.com/AppImage/AppImages/master/pkg2appimage
+    - chmod u+x pkg2appimage
+    - ./pkg2appimage distribution/universal/appimage/marcfs.yml
+  artifacts:
+    paths:
+      - "*.AppImage"
 
 # ------------------------ ubuntu > trusty doesn't have fuse3
 #build on ubuntu:
