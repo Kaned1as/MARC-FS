@@ -32,9 +32,8 @@
 
 using namespace std;
 using namespace curl;
-using namespace Json;
 
-static const string SAFE_USER_AGENT = "Mozilla / 5.0(Windows; U; Windows NT 5.1; en - US; rv: 1.9.0.1) Gecko / 2008070208 Firefox / 3.0.1";
+static const string SAFE_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
 
 static const string AUTH_DOMAIN = "https://auth.mail.ru";
 static const string CLOUD_DOMAIN = "https://cloud.mail.ru";
@@ -147,8 +146,7 @@ string MarcRestClient::performPost()
     return stream.str();
 }
 
-template<typename Container>
-void MarcRestClient::performGet(Container &target)
+void MarcRestClient::performGet(AbstractStorage &target)
 {
     curl_header header;
     header.add("Accept: */*");
@@ -169,7 +167,7 @@ void MarcRestClient::performGet(Container &target)
 
     restClient->add<CURLOPT_WRITEDATA>(&target);
     restClient->add<CURLOPT_WRITEFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto result = static_cast<Container *>(userp);
+        auto result = static_cast<AbstractStorage *>(userp);
         char *bytes = static_cast<char *>(contents);
         const size_t realsize = size * nmemb;
         result->append(bytes, realsize);
@@ -253,6 +251,9 @@ void MarcRestClient::obtainCloudCookie()
 
 void MarcRestClient::obtainAuthToken()
 {
+    using Json::Value;
+    using Json::Reader;
+
     restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
     string answer = performPost();
 
@@ -343,6 +344,8 @@ void MarcRestClient::remove(string remotePath)
 
 SpaceInfo MarcRestClient::df()
 {
+    using Json::Value;
+    using Json::Reader;
 
     string getFields = paramString({
         {"api", "2"},
@@ -401,6 +404,9 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
 
 string MarcRestClient::share(string remotePath)
 {
+    using Json::Value;
+    using Json::Reader;
+
     string postFields = paramString({
         {"api", "2"},
         {"home", remotePath},
@@ -423,18 +429,14 @@ string MarcRestClient::share(string remotePath)
     return response["body"].asString();
 }
 
-template <typename Container>
 struct ReadData {
-    /*const*/ Container * const content; // content to read from
+    /*const*/ AbstractStorage * const content; // content to read from
     off_t offset; // current offset of read
     off_t count; // maximum offset - can be lower than content.size()
 };
 
-template<typename Container>
-void MarcRestClient::upload(string remotePath, Container &body, off_t start, off_t count)
+void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count)
 {
-    static_assert(is_same<Container, vector<char>>::value ||
-                  is_same<Container, AbstractStorage>::value, "Container should be of compatible container type");
 
     if (body.empty()) {
         // zero size upload requested, skip upload part completely
@@ -451,7 +453,7 @@ void MarcRestClient::upload(string remotePath, Container &body, off_t start, off
     // fileupload part
     curl_form nameForm;
     off_t realSize = min(body.size() - start, count); // size to transfer
-    ReadData<Container> ptr {&body, start, min(body.size(), start + count)};
+    ReadData ptr {&body, start, min(body.size(), start + count)};
     nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
                  curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
                  curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
@@ -462,7 +464,7 @@ void MarcRestClient::upload(string remotePath, Container &body, off_t start, off
     // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
     restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
-        auto source = static_cast<ReadData<Container> *>(userp);
+        auto source = static_cast<ReadData *>(userp);
         auto target = static_cast<char *>(contents);
         const size_t requested = size * nmemb;
         const size_t available = source->count - source->offset;
@@ -492,6 +494,9 @@ void MarcRestClient::mkdir(string remotePath)
 
 vector<CloudFile> MarcRestClient::ls(string remotePath)
 {
+    using Json::Value;
+    using Json::Reader;
+
     string getFields = paramString({
         {"api", "2"},
         {"limit", "100500" }, // 100500 files in folder - who'd dare for more?
@@ -520,16 +525,10 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
     return results;
 }
 
-template<typename Container>
-void MarcRestClient::download(string remotePath, Container& target)
+void MarcRestClient::download(string remotePath, AbstractStorage &target)
 {
     Shard s = obtainShard(Shard::ShardType::GET);
     restClient->escape(remotePath);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());
     performGet(target);
 }
-
-// template instantiations
-template void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count);
-template void MarcRestClient::download(string remotePath, AbstractStorage& target);
-template void MarcRestClient::performGet(AbstractStorage &target);

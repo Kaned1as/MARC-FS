@@ -30,10 +30,6 @@ using namespace std;
 
 extern MruMetadataCache fsCache;
 
-// template instantiation declarations
-extern template void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count);
-extern template void MarcRestClient::download(string remotePath, AbstractStorage& target);
-
 MarcFileNode::MarcFileNode()
 {
     if (fsCache.cacheDir.empty()) {

@@ -1,0 +1,10 @@
+{
+    "cmake.configureOnOpen": true,
+    "files.associations": {
+        "string": "cpp",
+        "type_traits": "cpp",
+        "vector": "cpp",
+        "cstdint": "cpp",
+        "cstdlib": "cpp"
+    }
+}

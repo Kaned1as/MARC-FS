@@ -35,6 +35,8 @@
 
 extern const std::string SCLD_PUBLICLINK_ENDPOINT;
 
+class AbstractStorage;
+
 /**
  * @brief The MarcRestClient class - Abstraction layer between FUSE API and Mail.ru Cloud API.
  *
@@ -81,8 +83,7 @@ public:
      * @brief upload uploads bytes in @param body to remote endpoint
      * @param remotePath remote path to folder where uploaded file should be (e.g. /newfolder)
      */
-    template<typename Container>
-    void upload(std::string remotePath, Container &body, off_t start = 0, off_t count = std::numeric_limits<off_t>::max());
+    void upload(std::string remotePath, AbstractStorage &body, off_t start = 0, off_t count = std::numeric_limits<off_t>::max());
 
     /**
      * @brief create - create empty file at path
@@ -107,8 +108,7 @@ public:
      * @param remotePath remote path on cloud server
      * @param target target of download operation - resulting bytes are appended there
      */
-    template<typename Container>
-    void download(std::string remotePath, Container &target);
+    void download(std::string remotePath, AbstractStorage &target);
 
     /**
      * @brief remove removes file pointed by remotePath from cloud storage
@@ -210,8 +210,7 @@ private:
     std::string paramString(Params const &params);
     std::string performPost();
 
-    template<typename Container>
-    void performGet(Container &target);
+    void performGet(AbstractStorage &target);
 
     std::unique_ptr<curl::curl_easy> restClient;
     curl::curl_cookie cookieStore;

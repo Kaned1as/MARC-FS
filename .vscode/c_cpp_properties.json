@@ -2,25 +2,13 @@
     "configurations": [
         {
             "name": "Debug",
-            "includePath": [
-                "/usr/include",
-                "${workspaceRoot}"
-            ],
             "defines": [],
             "compileCommands": "build/compile_commands.json",
-            "browse": {
-                "path": [ 
-                    "/usr/include", 
-                    "${workspaceRoot}" 
-                ],
-                "limitSymbolsToIncludedHeaders": true,
-                "databaseFilename": ""
-            },
-            "intelliSenseMode": "clang-x64",
-            "compilerPath": "/usr/bin/clang++",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/usr/bin/g++",
             "cStandard": "c11",
             "cppStandard": "c++17"
         }
     ],
-    "version": 3
+    "version": 4
 }
