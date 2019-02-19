@@ -138,7 +138,7 @@ fstest on fedora:
   
 build on arch:
 # image: pritunl/archlinux # GPG signing errors
-  image: base/archlinux
+  image: archlinux/base
   stage: arch build
   dependencies: []
   before_script:
@@ -149,7 +149,7 @@ build on arch:
   
 aur package for arch:
 # image: pritunl/archlinux # GPG signing errors
-  image: base/archlinux
+  image: archlinux/base
   stage: arch build
   dependencies: []
   before_script:
@@ -166,7 +166,7 @@ aur package for arch:
 
 fstest on arch:
 # image: pritunl/archlinux
-  image: base/archlinux
+  image: archlinux/base
   stage: arch fstest
   dependencies:
     - build on arch
