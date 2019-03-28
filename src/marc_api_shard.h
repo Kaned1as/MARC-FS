@@ -57,6 +57,7 @@ public:
             case ShardType::GET: return "get";
             case ShardType::UPLOAD: return "upload";
             case ShardType::THUMBNAILS: return "thumbnails";
+            default: return "get";
         }
     }
 

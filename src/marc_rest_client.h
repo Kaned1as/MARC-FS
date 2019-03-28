@@ -73,6 +73,18 @@ public:
     void setProxy(std::string proxyUrl);
 
     /**
+     * @brief setMaxDownloadRate - set maximum download rate for this client, in bytes.
+     * @param rate - rate to set
+     */
+    void setMaxDownloadRate(long rate);
+
+    /**
+     * @brief setMaxUploadRate - set maximum upload rate for this client, in bytes.
+     * @param rate - rate to set
+     */
+    void setMaxUploadRate(long rate);
+
+    /**
      * @brief API::login Sends auth info and initializes this API object on successful login.
      * @param acc account to auth with
      * @return true if authenticated successfully, false otherwise.
@@ -216,6 +228,9 @@ private:
     curl::curl_cookie cookieStore;
 
     std::string proxyUrl;
+    long maxUploadRate = 0;
+    long maxDownloadRate = 0;
+
     Account authAccount;
     std::string authToken;
 

@@ -34,17 +34,18 @@
 #define MARC_FS_OPT(t, p, v) { t, offsetof(MarcfsConfig, p), v }
 #define MARC_FS_VERSION "0.1"
 
-using namespace std;
-
 extern MruMetadataCache fsCache;
 
 // config struct declaration for cmdline parsing
 struct MarcfsConfig {
-     char *username;
-     char *password;
-     char *cachedir;
-     char *conffile;
-     char *proxyurl;
+     char *username = nullptr; // username, full login@domain.tld
+     char *password = nullptr; // password for username
+     char *cachedir = nullptr; // cache directory on local filesystem
+     char *conffile = nullptr; // config file, default is ~/.config/marcfs/config.json
+     char *proxyurl = nullptr; // proxy url, default is taken from http(s)_proxy env var
+
+     long maxDownloadRate = 0; // rate limit on download, in KiB/s
+     long maxUploadRate = 0; // rate limit on upload, in KiB/s
 };
 
 // non-value options
@@ -59,6 +60,8 @@ static struct fuse_opt marcfsOpts[] = {
      MARC_FS_OPT("cachedir=%s",   cachedir, 0),
      MARC_FS_OPT("conffile=%s",   conffile, 0),
      MARC_FS_OPT("proxyurl=%s",   proxyurl, 0),
+     MARC_FS_OPT("max-download-rate=%l",   maxDownloadRate, 0),
+     MARC_FS_OPT("max-upload-rate=%l",   maxUploadRate, 0),
 
      FUSE_OPT_KEY("-V",         KEY_VERSION),
      FUSE_OPT_KEY("--version",  KEY_VERSION),
@@ -70,6 +73,8 @@ static struct fuse_opt marcfsOpts[] = {
 // handling non-value options
 static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct fuse_args *outargs)
 {
+    using namespace std;
+
     switch (key) {
         case KEY_HELP:
             fprintf(stderr,
@@ -86,6 +91,8 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
             "    -o cachedir=STRING - cache dir for not storing everything in RAM\n"
             "    -o conffile=STRING - json config file location with other params\n"
             "    -o proxyurl=STRING - proxy URL to use for making HTTP calls\n"
+            "    -o max-download-rate=INTEGER - rate limit on download, in KiB/s\n"
+            "    -o max-upload-rate=INTEGER - rate limit on upload, in KiB/s\n"
             , outargs->argv[0]);
             exit(1);
         case KEY_VERSION:
@@ -132,6 +139,12 @@ static void loadConfigFile(MarcfsConfig *conf) {
 
     if (!conf->proxyurl && config["proxyurl"] != Value())
         conf->proxyurl = strdup(config["proxyurl"].asCString());
+    
+    if (!conf->maxDownloadRate && config["max-download-rate"] != Value())
+        conf->maxDownloadRate = config["max-download-rate"].asInt64();
+
+    if (!conf->maxUploadRate && config["max-upload-rate"] != Value())
+        conf->maxUploadRate = config["max-upload-rate"].asInt64();
 }
 
 /**
@@ -157,6 +170,8 @@ static void hideSensitiveData(char *param, size_t rest) {
  * @param argv - argument array, pass directly from main
  */
 static void hideSensitive(int argc, char *argv[]) {
+    using namespace std;
+
     for (int i = 1; i < argc; ++i) {
         char *user = strstr(argv[i], "username=");
         char *pasw = strstr(argv[i], "password=");
@@ -171,6 +186,8 @@ static void hideSensitive(int argc, char *argv[]) {
 
 int main(int argc, char *argv[])
 {
+    using namespace std;
+
     // disable SIGPIPE that may come from openssl internals
     signal(SIGPIPE, SIG_IGN);
 
@@ -205,6 +222,14 @@ int main(int argc, char *argv[])
     MarcRestClient rc;
     if(conf.proxyurl)
         rc.setProxy(conf.proxyurl);
+
+    // setup speed limits
+    if (conf.maxDownloadRate) {
+        rc.setMaxDownloadRate(conf.maxDownloadRate * 1024);
+    }
+    if (conf.maxUploadRate) {
+        rc.setMaxUploadRate(conf.maxUploadRate * 1024);
+    }
 
     rc.login(acc); // authenticate one instance to populate pool
     fsCache.clientPool.populate(rc, 25);

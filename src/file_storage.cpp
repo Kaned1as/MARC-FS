@@ -77,17 +77,24 @@ off_t FileStorage::size()
 
 int FileStorage::read(char *buf, size_t size, uint64_t offset)
 {
+    // concurrent access would destroy seek/tell sequence
+    lock_guard<mutex> guard(rw_mutex);
+
     // stream offsets are signed, but we're safe since we count everything
     // from the beginning of a file
     data.seekg(static_cast<streamoff>(offset));
     data.read(buf, static_cast<streamoff>(size));
     if (data.eof()) // read may fail if we reach eof
         data.clear(); // clear possible failbit
+    cout << data.tellg() << endl;
     return static_cast<int>(data.gcount());
 }
 
 int FileStorage::write(const char *buf, size_t size, uint64_t offset)
 {
+    // concurrent access would destroy seek/tell sequence
+    lock_guard<mutex> guard(rw_mutex);
+
     data.seekp(static_cast<streamoff>(offset));
     data.write(buf, static_cast<streamoff>(size));
     return static_cast<int>(data.tellp()) - static_cast<int>(offset);
@@ -97,6 +104,7 @@ void FileStorage::append(const char *buf, size_t size)
 {
     data.seekp(0, ios::end);
     data.write(buf, static_cast<streamoff>(size));
+    cout << data.tellp() << endl;
 }
 
 string FileStorage::readFully()

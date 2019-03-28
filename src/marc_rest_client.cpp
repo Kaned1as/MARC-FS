@@ -69,7 +69,9 @@ MarcRestClient::MarcRestClient()
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
       cookieStore(*restClient),        // cokie_store is not copyable, init in body
-      proxyUrl(toCopy.proxyUrl),        // copy proxy URL
+      proxyUrl(toCopy.proxyUrl), 
+      maxDownloadRate(toCopy.maxDownloadRate), 
+      maxUploadRate(toCopy.maxUploadRate), 
       authAccount(toCopy.authAccount), // copy account from other one
       authToken(toCopy.authToken) // copy auth token from other one
 
@@ -83,6 +85,16 @@ MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
 void MarcRestClient::setProxy(string proxyUrl)
 {
     this->proxyUrl = proxyUrl;
+}
+
+void MarcRestClient::setMaxDownloadRate(long rate)
+{
+    this->maxDownloadRate = rate;
+}
+
+void MarcRestClient::setMaxUploadRate(long rate)
+{
+    this->maxUploadRate = rate;
 }
 
 string MarcRestClient::paramString(Params const &params)
@@ -118,8 +130,10 @@ string MarcRestClient::performPost()
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
-    if (!proxyUrl.empty())
-        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
+    if (!this->proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(this->proxyUrl.data());
+    if (this->maxUploadRate)
+        restClient->add<CURLOPT_MAX_SEND_SPEED_LARGE>(this->maxUploadRate);
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -153,8 +167,10 @@ void MarcRestClient::performGet(AbstractStorage &target)
     header.add("Origin: " + CLOUD_DOMAIN);
 
     ScopeGuard resetter = [&] { restClient->reset(); };
-    if (!proxyUrl.empty())
-        restClient->add<CURLOPT_PROXY>(proxyUrl.data());
+    if (!this->proxyUrl.empty())
+        restClient->add<CURLOPT_PROXY>(this->proxyUrl.data());
+    if (this->maxDownloadRate)
+        restClient->add<CURLOPT_MAX_RECV_SPEED_LARGE>(this->maxDownloadRate);
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -252,16 +268,12 @@ void MarcRestClient::obtainCloudCookie()
 void MarcRestClient::obtainAuthToken()
 {
     using Json::Value;
-    using Json::Reader;
 
     restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
     string answer = performPost();
 
     Value response;
-    Reader reader;
-
-    if (!reader.parse(answer, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Invalid json received from cloud endpoint!");
+    istringstream(answer) >> response;
 
     if (response["body"] == Value() || response["body"]["token"] == Value())
         throw MailApiException("Received json doesn't contain token string!");
@@ -278,10 +290,7 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type)
     string answer = performPost();
 
     Value response;
-    Json::Reader reader;
-
-    if (!reader.parse(answer, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Error parsing shard response JSON");
+    istringstream(answer) >> response;
 
     if (response["body"] != Value()) {
         return Shard(response["body"][Shard::asString(type)]);
@@ -345,7 +354,6 @@ void MarcRestClient::remove(string remotePath)
 SpaceInfo MarcRestClient::df()
 {
     using Json::Value;
-    using Json::Reader;
 
     string getFields = paramString({
         {"api", "2"},
@@ -353,14 +361,11 @@ SpaceInfo MarcRestClient::df()
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
-    string answerJson = performPost();
+    string answer = performPost();
 
     SpaceInfo result;
     Value response;
-    Reader reader;
-
-    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Cannot parse JSON df response!");
+    istringstream(answer) >> response;
 
     // if `total` is there, `used` will definitely be...
     if (response["body"] == Value() || response["body"]["bytes_total"] == Value())
@@ -405,7 +410,6 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath)
 string MarcRestClient::share(string remotePath)
 {
     using Json::Value;
-    using Json::Reader;
 
     string postFields = paramString({
         {"api", "2"},
@@ -415,13 +419,10 @@ string MarcRestClient::share(string remotePath)
 
     restClient->add<CURLOPT_URL>(SCLD_PUBLISHFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    string answerJson = performPost();
+    string answer = performPost();
 
     Value response;
-    Reader reader;
-
-    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Cannot parse JSON share response!");
+    istringstream(answer) >> response;
 
     if (response["body"] == Value())
         throw MailApiException("Non-well formed JSON share response!");
@@ -495,7 +496,6 @@ void MarcRestClient::mkdir(string remotePath)
 vector<CloudFile> MarcRestClient::ls(string remotePath)
 {
     using Json::Value;
-    using Json::Reader;
 
     string getFields = paramString({
         {"api", "2"},
@@ -505,15 +505,12 @@ vector<CloudFile> MarcRestClient::ls(string remotePath)
     });
 
     restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    string answerJson = performPost();
+    string answer = performPost();
 
     vector<CloudFile> results;
     Value response;
-    Reader reader;
+    istringstream(answer) >> response;
 
-    if (!reader.parse(answerJson, response)) // invalid JSON (shouldn't happen)
-        throw MailApiException("Cannot parse JSON ls response!");
-    
     if (response["body"] == Value() || response["body"]["list"] == Value())
         throw MailApiException("Non-well formed JSON ls response!");
 

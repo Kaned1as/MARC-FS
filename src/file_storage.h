@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <fstream>
+#include <mutex>
 #include "abstract_storage.h"
 
 /**
@@ -49,6 +50,8 @@ public:
     virtual void truncate(off_t size) override;
 private:
     static std::atomic_ulong counter;
+
+    std::mutex rw_mutex;
     std::string filename;
     std::basic_fstream<char> data;
 };
