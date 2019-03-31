@@ -127,7 +127,7 @@ And so... A holy place is never empty.
 Bugs & Known issues
 -------------------
 1. Temporary
-  - SOme issues may arise if you delete/move file that is currently copied or read. Please report such bugs here.
+  - Some issues may arise if you delete/move file that is currently copied or read. Please report such bugs here.
   - big memory footprint due to 
       - SSL engine sessions - tend to become bigger with time (WIP)
       - heap fragmentation (WIP)
@@ -147,7 +147,7 @@ Audits from code style and security standpoint are also much appreciated.
 License
 -------
 
-    Copyright (C) 2016-2017  Oleg `Kanedias` Chernovskiy
+    Copyright (C) 2016-2019  Oleg `Kanedias` Chernovskiy
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
