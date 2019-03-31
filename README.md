@@ -2,7 +2,7 @@
 [![build status](https://gitlab.com/Kanedias/MARC-FS/badges/master/build.svg)](https://gitlab.com/Kanedias/MARC-FS/commits/master)
 [![License](https://img.shields.io/aur/license/marcfs-git.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Fedora RPM package](https://img.shields.io/badge/Fedora-RPM-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=rpm+package+for+fedora)
-[![Ubuntu DEB package](https://img.shields.io/badge/Ubuntu-DEB-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=deb+package+for+ubuntu)
+[![Universal binary](https://img.shields.io/badge/Universal-ELF-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=static+binary+universal+build)
 [![Archlinux AUR package](https://img.shields.io/badge/Arch-AUR-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=aur+package+for+arch)
 
 MARC-FS
@@ -98,6 +98,17 @@ If cachedir option is given, MARC-FS stores all intermediate data there. It mean
 in some process, copied/read or being edited - will have their data stored in this dir. This may sound like plenty 
 of space, but most software execute file operations sequentally, so in case of copying large media library on/from 
 the cloud you won't need more free space than largest one of the files occupies.
+
+#### Static build ####
+
+There's a static build of MARC-FS available [here](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=static+binary+universal+build), with all packed dependencies included inside.
+This version can be used on any GNU/Linux distribution, but with some restrictions.
+
+1. FUSE module must be active, e.g. `/dev/fuse` device node must be accessible
+2. The `marcfs` binary itself should have `cap_sys_admin` capability in order to mount itself,
+   or it will fallback to `fusermount3` invocation, which may not be available on your distribution.
+   You can achieve this with `sudo setcap cap_sys_admin+ep marcfs` or `chmod u+s marcfs` commands.
+3. Don't use `-o auto_unmount` or it will again try to fallback to `fusermount3`.
 
 API references
 --------------

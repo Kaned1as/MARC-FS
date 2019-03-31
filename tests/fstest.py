@@ -43,7 +43,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
 
     @classmethod
     def umount_marcfs(cls):
-        os.system('fusermount3 -u %s' % MARCFS_MOUNTDIR)
+        os.system('fusermount -u %s' % MARCFS_MOUNTDIR)
         # at this point FS is unmounted, dirs should be empty
         os.rmdir(MARCFS_MOUNTDIR)
         os.rmdir(MARCFS_CACHEDIR)

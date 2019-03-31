@@ -1,3 +1,7 @@
+# Notes:
+# Ubuntu is disabled due to fuse3 being not available there
+# Fstest requires fuse2 because fusermount binary is used for unmounting
+
 variables:
   GET_SOURCES_ATTEMPTS: "3"
   GIT_SUBMODULE_STRATEGY: "recursive"
@@ -89,47 +93,53 @@ static binary universal build:
     - cd $CI_PROJECT_DIR
     - cd contrib/jsoncpp
     - meson --buildtype release --default-library static --prefix /usr . build
-    - ninja -v -C build install
+    - ninja -C build install
       # libfuse
     - cd $CI_PROJECT_DIR
     - git clone https://github.com/libfuse/libfuse contrib/libfuse
     - cd contrib/libfuse
     - meson --buildtype release --default-library static --prefix /usr -Dudevrulesdir=/nonexistent . build
-    - ninja -v -C build install
+    - ninja -C build install
       # openssl
     - cd $CI_PROJECT_DIR
-    - curl https://www.openssl.org/source/openssl-1.1.1b.tar.gz | tar -xvz -C contrib
+    - curl https://www.openssl.org/source/openssl-1.1.1b.tar.gz | tar -xz -C contrib
     - cd contrib/openssl-1.1.1b
     - ./config --prefix=/usr no-shared
     - make -j$(nproc)
     - make -j$(nproc) install
       # zlib
     - cd $CI_PROJECT_DIR
-    - curl https://zlib.net/zlib-1.2.11.tar.gz | tar -xvz -C contrib
+    - curl https://zlib.net/zlib-1.2.11.tar.gz | tar -xz -C contrib
     - cd contrib/zlib-1.2.11
     - ./configure --static --prefix=/usr
     - make -j$(nproc)
     - make -j$(nproc) install
       # curl
     - cd $CI_PROJECT_DIR
-    - curl https://curl.haxx.se/download/curl-7.64.1.tar.gz | tar -xvz -C contrib
+    - curl https://curl.haxx.se/download/curl-7.64.1.tar.gz | tar -xz -C contrib
     - cd contrib/curl-7.64.1
-    - ./configure --disable-shared --prefix=/usr --with-ssl=$HOME/contrib/openssl-1.1.1b/ --with-zlib=$HOME/contrib/zlib-1.2.11
+    - ./configure --disable-shared --prefix=/usr --with-ssl=$CI_PROJECT_DIR/contrib/openssl-1.1.1b/ --with-zlib=$CI_PROJECT_DIR/contrib/zlib-1.2.11
     - make -j$(nproc) install
     - cd $CI_PROJECT_DIR
-  script: *common_script
+  script:
+    - mkdir build
+    - cd build
+    - cmake .. -DSTATIC_LINKING=ON
+    - make -j$(nproc)
+    - ./apitest
   artifacts: *common_artifacts
 
 static binary test:
-  image: ubuntu # we shall test static binary on another distro
-  stage: universal test
+  image: ubuntu # we should test static binary on another distro
+  stage: universal fstest
   dependencies:
     - static binary universal build
   before_script:
-    - apt-get update --quiet && apt-get install python3 --yes
+    - apt-get update --quiet && apt-get install python3 ca-certificates libcap2-bin fuse --yes
     - useradd --create-home fstest
     - cp build/marcfs tests/fstest.py ~fstest
     - "chown -R fstest: ~fstest"
+    - setcap cap_sys_admin+ep ~fstest/marcfs
   script: *common_fstest_script
   after_script: *common_fstest_after
 
@@ -165,7 +175,7 @@ fstest on fedora:
   dependencies:
     - build on fedora
   before_script:
-    - yum -y install fuse3 fuse3-libs libcurl jsoncpp python
+    - yum -y install fuse fuse-libs fuse3 fuse3-libs libcurl jsoncpp python
     - useradd --create-home fstest
     - cp build/marcfs tests/fstest.py ~fstest
     - "chown -R fstest: ~fstest"
@@ -186,7 +196,6 @@ build on arch:
   artifacts: *common_artifacts
   
 aur package for arch:
-# image: pritunl/archlinux # GPG signing errors
   image: archlinux/base
   stage: arch build
   dependencies: []
@@ -203,14 +212,13 @@ aur package for arch:
       - "*.tar.xz"
 
 fstest on arch:
-# image: pritunl/archlinux
   image: archlinux/base
   stage: arch fstest
   dependencies:
     - build on arch
   before_script:
     - pacman -Syu --noconfirm
-    - pacman -S --noconfirm fuse3 libcurl-gnutls jsoncpp python
+    - pacman -S --noconfirm fuse3 fuse2 libcurl-gnutls jsoncpp python
     - useradd --create-home fstest
     - cp build/marcfs tests/fstest.py ~fstest
     - "chown -R fstest: ~fstest"

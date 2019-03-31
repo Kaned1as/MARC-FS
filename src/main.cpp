@@ -191,11 +191,6 @@ int main(int argc, char *argv[])
     // disable SIGPIPE that may come from openssl internals
     signal(SIGPIPE, SIG_IGN);
 
-    if (getuid() == 0 || geteuid() == 0) {
-        cerr << "Running MARC-FS as root opens unacceptable security holes" << endl;
-        return -1;
-    }
-
     if (argc < 2) { // didn't send anything?
         cerr << "No command options specified, ";
         cerr << "please try -h or --help to get comprehensive list" << endl;
@@ -211,6 +206,12 @@ int main(int argc, char *argv[])
 
     // load config from file
     loadConfigFile(&conf);
+
+    // check config validity
+    if (!conf.username || !conf.password) {
+        cerr << "Both 'username' and 'password' parameters must be specified";
+        return 3;
+    }
 
     // hide credentials from htop/top/ps output
     hideSensitive(argc, argv);

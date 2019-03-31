@@ -5,6 +5,9 @@
         "type_traits": "cpp",
         "vector": "cpp",
         "cstdint": "cpp",
-        "cstdlib": "cpp"
+        "cstdlib": "cpp",
+        "sstream": "cpp",
+        "iosfwd": "cpp",
+        "iostream": "cpp"
     }
 }
