@@ -81,7 +81,9 @@ You can override its' location via `-o conffile=/path/to/config` option. Example
     "username": "user@mail.ru",
     "password": "password",
     "cachedir": "/absolute/path",
-    "proxyurl": "http://localhost:3128"
+    "proxyurl": "http://localhost:3128",
+    "max-download-rate": "10000",
+    "max-upload-rate": "10000"
 }
 ```
 

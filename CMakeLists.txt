@@ -7,13 +7,13 @@ set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
 if(STATIC_LINKING)
     set(BUILD_SHARED_LIBS OFF)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-    SET(CMAKE_EXE_LINKER_FLAGS "-static")
+    set(CMAKE_EXE_LINKER_FLAGS "-static -Bstatic")
+    set(CMAKE_LINK_SEARCH_START_STATIC 1)
+    set(CMAKE_LINK_SEARCH_END_STATIC 1)
 endif(STATIC_LINKING)
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 14)
-message(STATUS "Cmake system: " ${CMAKE_SYSTEM} )
-message(STATUS "Cmake arch: " ${CMAKE_SYSTEM_PROCESSOR} )
 
 # custom compile flags
 set(FUSE_REQUIRED_FLAGS "-D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=30")
@@ -26,13 +26,17 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 # internal libs and packages #
 #                            #
 
+
 # Curl C++ bindings
 add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
 include_directories(${CURLCPP_SOURCE_DIR}/include)
+list(APPEND REQUIRED_LIBS curlcpp)
+list(APPEND TEST_LIBS curlcpp)
 
 # Googletest bindings
 add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
 include_directories(${gtest_SOURCE_DIR}/include)
+list(APPEND TEST_LIBS gtest_main)
 
 #                            #
 # external libs and packages #
@@ -40,20 +44,25 @@ include_directories(${gtest_SOURCE_DIR}/include)
 
 # FUSE
 find_package(FUSE3 REQUIRED)
-if(NOT FUSE3_FOUND)
-    message(SEND_ERROR "Failed to find fuse")
-    return()
-else()
-    include_directories(${FUSE3_INCLUDE_DIR})
-endif()
+include_directories(${FUSE3_INCLUDE_DIR})
+list(APPEND REQUIRED_LIBS ${FUSE3_LIBRARIES})
+list(APPEND TEST_LIBS ${FUSE3_LIBRARIES})
 
 # JSONCPP
 find_package(JSONCPP REQUIRED)
-if (NOT JSONCPP_FOUND)
-    message(SEND_ERROR "Failed to find jsoncpp")
-    return()
-else()
-    include_directories(${JSONCPP_INCLUDE_DIR})
+include_directories(${JSONCPP_INCLUDE_DIR})
+list(APPEND REQUIRED_LIBS ${JSONCPP_LIBRARIES})
+list(APPEND TEST_LIBS ${JSONCPP_LIBRARIES})
+
+list(APPEND REQUIRED_LIBS pthread)
+list(APPEND TEST_LIBS pthread)
+
+if(STATIC_LINKING)
+    # find libcurl flags through pkg-config
+    find_package(PkgConfig QUIET)
+    pkg_check_modules(CURL libcurl REQUIRED)
+    list(APPEND REQUIRED_LIBS ${CURL_STATIC_LIBRARIES})
+    list(APPEND TEST_LIBS ${CURL_STATIC_LIBRARIES})
 endif()
 
 # JEMALLOC - optional
@@ -68,21 +77,12 @@ endif()
 set(SRC_NO_MAIN ${SRC_LIST})
 list(REMOVE_ITEM SRC_NO_MAIN src/main.cpp)
 add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
-target_link_libraries(apitest
-    gtest_main
-    curlcpp
-    ${JSONCPP_LIBRARIES}
-    ${FUSE3_LIBRARIES})
+target_link_libraries(apitest ${TEST_LIBS})
 add_test(NAME rest_api_test COMMAND apitest)
 
 # final binary
 add_executable(marcfs ${SRC_LIST})
-target_link_libraries(marcfs
-    curlcpp
-    pthread
-    ${JSONCPP_LIBRARIES}
-    ${FUSE3_LIBRARIES}
-)
+target_link_libraries(marcfs ${REQUIRED_LIBS})
 
 # optional libs
 if(JEMALLOC_FOUND)

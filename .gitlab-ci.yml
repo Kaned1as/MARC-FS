@@ -6,7 +6,8 @@ variables:
 stages:
 #  - ubuntu build
 #  - ubuntu fstest
-#  - universal build
+  - universal build
+  - universal fstest
   - fedora build
   - fedora fstest
   - arch build
@@ -29,24 +30,6 @@ stages:
 
 .fstest_script: &common_fstest_script
   - su -c 'python3 fstest.py -v' - fstest
-
-# ------------------------ pkg2appimage doesn't work
-#appimage on ubuntu:
-#  image: ubuntu:trusty
-#  stage: universal build
-#  dependencies: []
-#  before_script: &common_compile_debian
-#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
-#    - apt-add-repository ppa:bkryza/fuse3
-#    - apt-get update -qq && apt-get install -y -qq wget git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
-#  script: *common_script
-#  after_script:
-#    - wget https://raw.githubusercontent.com/AppImage/AppImages/master/pkg2appimage
-#    - chmod u+x pkg2appimage
-#    - ./pkg2appimage distribution/universal/appimage/marcfs.yml
-#  artifacts:
-#    paths:
-#      - "*.AppImage"
 
 # ------------------------ ubuntu > trusty doesn't have fuse3
 #build on ubuntu:
@@ -94,6 +77,61 @@ stages:
 #    - "chown -R fstest: ~fstest"
 #  script: *common_fstest_script
 #  after_script: *common_fstest_after
+
+static binary universal build:
+  image: alpine
+  stage: universal build
+  dependencies: []
+  before_script:
+    - apk add g++ meson curl git pkgconf ninja make cmake perl linux-headers
+      # jsoncpp
+    - git clone https://github.com/open-source-parsers/jsoncpp contrib/jsoncpp
+    - cd $CI_PROJECT_DIR
+    - cd contrib/jsoncpp
+    - meson --buildtype release --default-library static --prefix /usr . build
+    - ninja -v -C build install
+      # libfuse
+    - cd $CI_PROJECT_DIR
+    - git clone https://github.com/libfuse/libfuse contrib/libfuse
+    - cd contrib/libfuse
+    - meson --buildtype release --default-library static --prefix /usr -Dudevrulesdir=/nonexistent . build
+    - ninja -v -C build install
+      # openssl
+    - cd $CI_PROJECT_DIR
+    - curl https://www.openssl.org/source/openssl-1.1.1b.tar.gz | tar -xvz -C contrib
+    - cd contrib/openssl-1.1.1b
+    - ./config --prefix=/usr no-shared
+    - make -j$(nproc)
+    - make -j$(nproc) install
+      # zlib
+    - cd $CI_PROJECT_DIR
+    - curl https://zlib.net/zlib-1.2.11.tar.gz | tar -xvz -C contrib
+    - cd contrib/zlib-1.2.11
+    - ./configure --static --prefix=/usr
+    - make -j$(nproc)
+    - make -j$(nproc) install
+      # curl
+    - cd $CI_PROJECT_DIR
+    - curl https://curl.haxx.se/download/curl-7.64.1.tar.gz | tar -xvz -C contrib
+    - cd contrib/curl-7.64.1
+    - ./configure --disable-shared --prefix=/usr --with-ssl=$HOME/contrib/openssl-1.1.1b/ --with-zlib=$HOME/contrib/zlib-1.2.11
+    - make -j$(nproc) install
+    - cd $CI_PROJECT_DIR
+  script: *common_script
+  artifacts: *common_artifacts
+
+static binary test:
+  image: ubuntu # we shall test static binary on another distro
+  stage: universal test
+  dependencies:
+    - static binary universal build
+  before_script:
+    - apt-get update --quiet && apt-get install python3 --yes
+    - useradd --create-home fstest
+    - cp build/marcfs tests/fstest.py ~fstest
+    - "chown -R fstest: ~fstest"
+  script: *common_fstest_script
+  after_script: *common_fstest_after
 
 build on fedora:
   image: fedora
