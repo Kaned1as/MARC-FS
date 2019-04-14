@@ -104,7 +104,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
             self.assertEqual(f.read(), text + text2, 'Appended and read content is not equal!')
 
     def test_truncate_file(self):
-        fname, text = self.test_write_to_file()
+        fname, _ = self.test_write_to_file()
         os.truncate(fname, 0)
         self.assertEqual(os.stat(fname).st_size, 0, 'Truncated file still has non-zero length!')
 
@@ -128,7 +128,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
 
     def test_move_file_to_existing(self):
         fname, text = self.test_write_to_file()
-        fname2, text2 = self.test_write_to_file()
+        fname2, _ = self.test_write_to_file()
         os.rename(fname, fname2)
         self.assertFalse(os.path.exists(fname), 'Moved file still exists!')
         self.assertTrue(os.path.isfile(fname2), 'Moved file not exists!')
@@ -157,7 +157,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         self.assertTrue(os.path.isdir(moved_dirname), 'Moved dir failed!')
 
     def test_remove_file(self):
-        fname, text = self.test_write_to_file()
+        fname, _ = self.test_write_to_file()
         os.unlink(fname)
         self.assertFalse(os.path.exists(fname), 'Deleting file failed!')
 
@@ -188,7 +188,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         self.assertFalse(os.path.exists(dirname1), 'Removed dir still exists!')
 
     def test_public_link(self):
-        fname, text = self.test_write_to_file()
+        fname, _ = self.test_write_to_file()
         plink_fname = fname + '.marcfs-link'
         with open(plink_fname, 'w'):
             os.utime(fname, None)

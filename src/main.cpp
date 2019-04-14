@@ -103,11 +103,11 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
 }
 
 static void loadConfigFile(MarcfsConfig *conf) {
-    using namespace Json;
     using namespace std;
 
-    Value config;
-    Reader reader;
+    Json::Value config;
+    Json::CharReaderBuilder reader;
+
     ifstream configFile;
     if (conf->conffile) {
         // config file location is set, try to load data from there
@@ -121,29 +121,31 @@ static void loadConfigFile(MarcfsConfig *conf) {
     if (configFile.fail())
         return; // no config file
 
-    bool ok = reader.parse(configFile, config, false);
+    string parseErrors;
+    bool ok = parseFromStream(reader, configFile, &config, &parseErrors);
     if (!ok) {
-        cerr << "Invalid json in config file, ignoring...";
+        cerr << "Errors parsing config file: " << parseErrors << endl;
+        cerr << "Invalid json in config file, ignoring..." << endl;
         return;
     }
 
     // we can convert it to offsetof+substitution macros in case option count exceeds imagination
-    if (!conf->username && config["username"] != Value())
+    if (!conf->username && config["username"] != Json::Value())
         conf->username = strdup(config["username"].asCString());
 
-    if (!conf->password && config["password"] != Value())
+    if (!conf->password && config["password"] != Json::Value())
         conf->password = strdup(config["password"].asCString());
 
-    if (!conf->cachedir && config["cachedir"] != Value())
+    if (!conf->cachedir && config["cachedir"] != Json::Value())
         conf->cachedir = strdup(config["cachedir"].asCString());
 
-    if (!conf->proxyurl && config["proxyurl"] != Value())
+    if (!conf->proxyurl && config["proxyurl"] != Json::Value())
         conf->proxyurl = strdup(config["proxyurl"].asCString());
     
-    if (!conf->maxDownloadRate && config["max-download-rate"] != Value())
+    if (!conf->maxDownloadRate && config["max-download-rate"] != Json::Value())
         conf->maxDownloadRate = config["max-download-rate"].asInt64();
 
-    if (!conf->maxUploadRate && config["max-upload-rate"] != Value())
+    if (!conf->maxUploadRate && config["max-upload-rate"] != Json::Value())
         conf->maxUploadRate = config["max-upload-rate"].asInt64();
 }
 
@@ -209,7 +211,7 @@ int main(int argc, char *argv[])
 
     // check config validity
     if (!conf.username || !conf.password) {
-        cerr << "Both 'username' and 'password' parameters must be specified";
+        cerr << "Both 'username' and 'password' parameters must be specified" << endl;
         return 3;
     }
 
