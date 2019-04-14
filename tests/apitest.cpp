@@ -1,8 +1,8 @@
 /*****************************************************************************
  *
- * Copyright (c) 2018, Oleg `Kanedias` Chernovskiy
+ * Copyright (c) 2018-2019, Oleg `Kanedias` Chernovskiy
  *
- * This file is part of MARC-FS testing suite.
+ * This file is part of MARC-FS.
  *
  * MARC-FS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
