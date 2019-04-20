@@ -32,7 +32,7 @@ static void fillStat(struct stat *stbuf, const CloudFile *cf) {
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
     stbuf->st_gid = ctx->gid;
 
-    if (cf->getType() == CloudFile::File) {
+    if (cf->getType() == S_IFREG) {
         stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
         stbuf->st_nlink = 1;
     } else {
@@ -50,7 +50,7 @@ static void fillStat(struct stat *stbuf, const CloudFile *cf) {
 #endif
 }
 
-static void emptyStat(struct stat *stbuf, int type) {
+void emptyStat(struct stat *stbuf, int type) {
     auto ctx = fuse_get_context();
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
     stbuf->st_gid = ctx->gid;

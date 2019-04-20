@@ -21,6 +21,7 @@
 #include "marc_api_cloudfile.h"
 
 #include <json/value.h>
+#include <sys/stat.h>
 
 CloudFile::CloudFile()
 {
@@ -28,7 +29,7 @@ CloudFile::CloudFile()
 }
 
 CloudFile::CloudFile(const Json::Value &val) {
-    type = val["type"].asString() == "file" ? File : Directory;
+    type = val["type"].asString() == "file" ? S_IFREG : S_IFDIR;
     kind = val["kind"].asString();
     home = val["home"].asString();
     name = val["name"].asString();
@@ -38,12 +39,12 @@ CloudFile::CloudFile(const Json::Value &val) {
     virusScan = val["virus_scan"].asString();
 }
 
-CloudFile::Type CloudFile::getType() const
+int CloudFile::getType() const
 {
     return type;
 }
 
-void CloudFile::setType(const Type &value)
+void CloudFile::setType(const int &value)
 {
     type = value;
 }

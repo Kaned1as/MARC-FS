@@ -45,6 +45,22 @@ MarcFileNode::MarcFileNode(CacheNode *cache) : MarcFileNode()
     mtime = cache->getMtime();
 }
 
+void MarcFileNode::fillStat(struct stat *stbuf) {
+    MarcNode::fillStat(stbuf);
+
+    stbuf->st_mode = S_IFREG | 0600; // cloud files are readable, but don't launch them
+    stbuf->st_nlink = 1;
+
+    stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
+    stbuf->st_blocks = getSize() / 512 + 1;
+
+#ifndef __APPLE__
+    stbuf->st_mtim.tv_sec = getMtime();
+#else
+    stbuf->st_mtimespec.tv_sec = mtime;
+#endif
+}
+
 void MarcFileNode::open(MarcRestClient *client, string path)
 {
     // open is potentially network-download operation, lock it

@@ -33,16 +33,12 @@ namespace Json {
 class CloudFile
 {
 public:
-    enum Type {
-        File,
-        Directory
-    };
 
     CloudFile();
     CloudFile(const Json::Value &val);
 
-    Type getType() const;
-    void setType(const Type &value);
+    int getType() const;
+    void setType(const int &value);
 
     std::string getKind() const;
     void setKind(const std::string &value);
@@ -66,7 +62,7 @@ public:
     void setVirusScan(const std::string &value);
 
 private:
-    Type type;
+    uint64_t type;
     std::string kind;       // seems to be the same as type
     std::string home;       // full remote path on server (with fname)
     std::string name;       // name of file

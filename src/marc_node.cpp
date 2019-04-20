@@ -18,9 +18,12 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <fuse3/fuse.h>
+
 #include "marc_rest_client.h"
 #include "marc_node.h"
 #include "utils.h"
+
 
 using namespace std;
 
@@ -32,6 +35,15 @@ MarcNode::MarcNode()
 MarcNode::~MarcNode()
 {
 
+}
+
+void MarcNode::fillStat(struct stat *stbuf) 
+{
+    auto ctx = fuse_get_context();
+    stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
+    stbuf->st_gid = ctx->gid;
+
+    stbuf->st_blksize = 4096;
 }
 
 void MarcNode::rename(MarcRestClient *client, string oldPath, string newPath)

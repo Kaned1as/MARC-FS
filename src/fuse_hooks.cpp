@@ -34,8 +34,8 @@
 const static std::regex COMPOUND_REGEX("(.+)(\\.marcfs-part-)(\\d+)");
 const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 
-// global MruData instance definition
-MruMetadataCache fsCache;
+ObjectPool<MarcRestClient> clientPool;
+std::string cacheDir;
 
 using namespace std;
 
@@ -44,7 +44,7 @@ static int doWithRetry(std::function<int(MarcRestClient *)> what) {
 
     while (retries > 0) {
         try {
-            auto client = fsCache.clientPool.acquire();
+            auto client = clientPool.acquire();
             return what(client.get());
         } catch (MailApiException &exc) {
             cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
@@ -122,7 +122,7 @@ void handleCompounds(vector<CloudFile> &files) {
  * @param filePath - path to the link file
  * @param file - cached link file node
  */
-int handleLinks(string filePath, MarcFileNode* file) {
+static int handleLinks(string filePath, MarcFileNode* file) {
     smatch match;
     if (!regex_match(filePath, match, SHARE_LINK_REGEX)) {
         return 0;
@@ -131,11 +131,14 @@ int handleLinks(string filePath, MarcFileNode* file) {
     string origPath = match[1];
     // string linkType = match[3];
 
-    auto origFile = fsCache.getNode(origPath);
+    // get info of original file
+    struct stat origFileInfo = {};
+    getattrCallback(origPath.data(), &origFileInfo, nullptr);
+
     string link;
-    if (origFile->getSize() > MARCFS_MAX_FILE_SIZE) {
+    if (origFileInfo.st_size > MARCFS_MAX_FILE_SIZE) {
         // it's compound, retrieve links for each part
-        off_t partCount = (origFile->getSize() / MARCFS_MAX_FILE_SIZE) + 1;
+        off_t partCount = (origFileInfo.st_size / MARCFS_MAX_FILE_SIZE) + 1;
         doWithRetry([&](MarcRestClient *client) -> int {
             for (off_t idx = 0; idx < partCount; ++idx) {
                 string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
@@ -156,29 +159,18 @@ int handleLinks(string filePath, MarcFileNode* file) {
     file->truncate(0);
     file->write(link.data(), link.size(), 0);
 
-    // update cache for the link file
-    auto node = fsCache.getNode(filePath);
-    node->setSize(file->getSize());
-    node->setMtime(file->getMtime());
-
     return 0;
 }
 
 int utimensCallback(const char *path, const struct timespec time[2], struct fuse_file_info *fi)
 {
     // API doesn't support utime, only seconds
+    // not sure how to update this on remote fs, so update only if it's opened now
 
     if (fi && fi->fh) {
         // it's opened file, apply mtime
         auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
         file->setMtime(time[1].tv_sec);
-    }
-
-    // update in cache
-    auto node = fsCache.getNode(path);
-    if (node) {
-        node->setMtime(time[1].tv_sec);
-        return 0;
     }
 
     // not in opened, not in cache, skip the call
@@ -198,25 +190,19 @@ void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
     return nullptr;
 }
 
-int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info */*fi*/)
+int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
 {
     // retrieve path to containing dir
     string pathStr(path); // e.g. /home/1517.svg
 
-    // try to retrieve it from cache
-    auto node = fsCache.getNode(pathStr);
-    if (node) { // have this file in stat cache
-        if (!node->exists) // we cached that this file doesn't exist previously, just repeat
-            return -ENOENT;
-
-        // it exists, fill stat buffer
-        *stbuf = node->stbuf;
+    if (pathStr == "/") { // special handling for root
+        emptyStat(stbuf, S_IFDIR);
         return 0;
     }
 
-    if (pathStr == "/") { // special handling for root
-        fsCache.putCacheStat(pathStr, S_IFDIR);
-        *stbuf = fsCache.getNode(pathStr)->stbuf;
+    if (fi && fi->fh) {
+        auto file = reinterpret_cast<MarcNode *>(fi->fh);
+        file->fillStat(stbuf);
         return 0;
     }
 
@@ -228,14 +214,6 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info */*fi*/
     // get containing dir name and filename
     string dirname = pathStr.substr(0, slashPos); // that would be /home
     string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
-
-    // dir cache check - if the dir is already cached after readdir
-    // and we had no results in cache above then file is nonexistent
-    auto dirNode = fsCache.getNode(dirname);
-    if (dirNode && dirNode->dir_cached) {
-        fsCache.putCacheStat(path, nullptr); // negative cache
-        return -ENOENT;
-    }
 
     // not found in cache, find requested file on cloud
     // get a listing of a containing dir for this file
@@ -251,11 +229,9 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info */*fi*/
         // put all retrieved files in cache
         for (CloudFile &cf : contents) {
             string fullPath = dirPath + cf.getName();
-
-            fsCache.putCacheStat(fullPath, &cf);
             if (cf.getName() == filename) {
                 // file found - fill statbuf
-                *stbuf = fsCache.getNode(pathStr)->stbuf;
+                fillStat(stbuf, &cf);
                 found = true;
             }
         }
@@ -264,7 +240,6 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info */*fi*/
             return 0;
 
         // not found - put negative mark in cache
-        fsCache.putCacheStat(path, 0);
         return -ENOENT;
     });
 }
@@ -299,13 +274,11 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 int openCallback(const char *path, struct fuse_file_info *fi)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
-        // use unique_ptr so if open() throws node will be deleted safely
-        auto node = fsCache.getNode(path);
-        auto file = make_unique<MarcFileNode>(node);
+        auto file = new MarcFileNode;
         file->open(client, path);
 
         // no errors
-        fi->fh = reinterpret_cast<uintptr_t>(file.release());
+        fi->fh = reinterpret_cast<uintptr_t>(file);
         return 0;
     });
 }
@@ -323,10 +296,6 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 
     string pathStr(path); // e.g. /directory or /
 
-    // try cache first
-    if (fsCache.tryFillDir(pathStr, dirhandle, filler))
-        return 0;
-
     return doWithRetry([&](MarcRestClient *client) -> int {
         auto contents = client->ls(pathStr);
         handleCompounds(contents);
@@ -335,13 +304,11 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         for (const CloudFile &cf : contents) {
             string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
-            fsCache.putCacheStat(fullPath, &cf);
-            filler(dirhandle, cf.getName().data(), &fsCache.getNode(fullPath)->stbuf, 0, (fuse_fill_dir_flags) 0);
+            struct stat stbuf = {};
+            fillStat(&stbuf, &cf);
+            filler(dirhandle, cf.getName().data(), &stbuf, 0, (fuse_fill_dir_flags) 0);
         }
 
-        // confirm readdir cache
-        auto node = fsCache.getNode(pathStr);
-        node->dir_cached = true;
         return 0;
     });
 }
@@ -367,11 +334,6 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
     int res = file->write(buf, size, offsetBytes);
-
-    // update cache size
-    auto node = fsCache.getNode(path); // should be present, we did mknod for it
-    node->setMtime(file->getMtime());
-    node->setSize(file->getSize());
 
     return res;
 }
@@ -405,7 +367,6 @@ int mkdirCallback(const char *path, mode_t /*mode*/)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->mkdir(path);
-        fsCache.putCacheStat(path, S_IFDIR);
         return 0;
     });
 }
@@ -418,7 +379,6 @@ int rmdirCallback(const char *path)
             return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
         client->remove(path);
-        fsCache.purgeCache(path);
         return 0;
     });
 }
@@ -428,9 +388,11 @@ int rmdirCallback(const char *path)
  */
 int unlinkCallback(const char *path)
 {
-    auto node = fsCache.getNode(path);
-    if (!node || !node->exists)
-        return -ENOENT;
+    // should we check for the file first?
+    struct stat stbuf = {};
+    int res = getattrCallback(path, &stbuf, nullptr);
+    if (res)
+        return res;
 
     // IMPORTANT!
     // if a file is opened (e.g. flushed) by another thread and we call rm (unlink) on it, then FUSE
@@ -442,9 +404,7 @@ int unlinkCallback(const char *path)
     // 3.          unlink file .fuse_hidden{...}
 
     return doWithRetry([&](MarcRestClient *client) -> int {
-
-        MarcFileNode file(node);
-        file.remove(client, path);
+        MarcFileNode(...).remove(client, path); // FIXME: check size!
         fsCache.purgeCache(path);
         return 0;
     });
@@ -457,11 +417,14 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
         return -ENOENT;
     }
 
-    MarcFileNode sourceFile(node);
+    MarcFileNode sourceFile(...);
     return doWithRetry([&](MarcRestClient *client) -> int {
-        auto target = fsCache.getNode(newPath);
-        if (target && target->exists) {
-            MarcFileNode targetFile(target);
+        // get info about the target
+        struct stat stbuf = {};
+        int res = getattrCallback(path, &stbuf, nullptr);
+
+        if (res == 0 /* target exists */) {
+            MarcFileNode targetFile(...);
 
             if (flags & RENAME_NOREPLACE) {
                 // file exists and replacement is not allowed
@@ -473,7 +436,6 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
                 targetFile.rename(client, newPath, string(newPath) + ".marcfs-temp");
                 sourceFile.rename(client, oldPath, newPath);
                 targetFile.rename(client, string(newPath) + ".marcfs-temp", oldPath);
-                fsCache.renameCache(oldPath, newPath, false);
                 return 0;
             }
 
@@ -484,7 +446,6 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
         // if we write new file and try to rename it while flushing to cloud
         // it will fail here with -EIO as actual addition happens only after file is uploaded
         sourceFile.rename(client, oldPath, newPath);
-        fsCache.renameCache(oldPath, newPath);
         return 0;
     });
 }
@@ -498,19 +459,15 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
         return 0;
     }
 
-    // file is not open, just reupload it with
+    // file is not open, just reupload it with requested size
     return doWithRetry([&](MarcRestClient *client) -> int {
-        auto cache = fsCache.getNode(path);
-
         // imitate reupload
-        MarcFileNode tempFile(cache);
+        MarcFileNode tempFile;
         tempFile.open(client, path);
         tempFile.truncate(size);
         tempFile.flush(client, path);
         tempFile.release();
 
-        cache->setSize(tempFile.getSize());
-        cache->setMtime(tempFile.getMtime());
         return 0;
     });
 
@@ -520,7 +477,6 @@ int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
     return doWithRetry([&](MarcRestClient *client) -> int {
         client->create(path);
-        fsCache.putCacheStat(path, S_IFREG);
         return 0;
     });
 }

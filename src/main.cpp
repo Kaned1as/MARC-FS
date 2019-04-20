@@ -34,7 +34,8 @@
 #define MARC_FS_OPT(t, p, v) { t, offsetof(MarcfsConfig, p), v }
 #define MARC_FS_VERSION "0.1"
 
-extern MruMetadataCache fsCache;
+extern ObjectPool<MarcRestClient> clientPool;
+extern std::string cacheDir;
 
 // config struct declaration for cmdline parsing
 struct MarcfsConfig {
@@ -235,7 +236,7 @@ int main(int argc, char *argv[])
     }
 
     rc.login(acc); // authenticate one instance to populate pool
-    fsCache.clientPool.populate(rc, 25);
+    clientPool.populate(rc, 25);
 
     // initialize cache dir
     if (conf.cachedir) {
@@ -248,7 +249,7 @@ int main(int argc, char *argv[])
         }
 
         // cache dir is valid
-        fsCache.cacheDir = conf.cachedir;
+        cacheDir = conf.cachedir;
     }
 
     // initialize FUSE

@@ -23,7 +23,8 @@
 
 #include "mru_cache.h"
 
-extern MruMetadataCache fsCache;
+extern ObjectPool<MarcRestClient> clientPool;
+extern std::string cacheDir;
 
 void * initCallback(struct fuse_conn_info *conn, struct fuse_config *cfg);
 

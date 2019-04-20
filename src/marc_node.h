@@ -41,6 +41,7 @@ public:
      *        may not be atomic for some file types.
      */
     virtual void rename(MarcRestClient *client, std::string oldPath, std::string newPath);
+    virtual void fillStat(struct stat *stbuf);
 
     std::mutex& getMutex();
 };

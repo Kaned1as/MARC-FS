@@ -27,6 +27,8 @@ class MarcDirNode : public MarcNode
 {
 public:
     MarcDirNode();
+    
+    void fillStat(struct stat *stbuf) override;
 
 private:
 };

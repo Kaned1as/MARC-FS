@@ -179,4 +179,7 @@ private:
     RwMutex cacheLock;
 };
 
+void emptyStat(struct stat *stbuf, int type);
+void fillStat(struct stat *stbuf, const CloudFile *cf);
+
 #endif // MRU_METADATA_H
