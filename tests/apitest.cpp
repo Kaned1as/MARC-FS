@@ -96,7 +96,7 @@ TEST(ApiIntegrationTesting, TestCreateFile) {
 
     EXPECT_NE(findFileInVec(fVec, "cheshire.cat"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "cheshire.cat")).getSize(), 0);
-    EXPECT_EQ((*findFileInVec(fVec, "cheshire.cat")).getType(), CloudFile::File);
+    EXPECT_EQ((*findFileInVec(fVec, "cheshire.cat")).getType(), S_IFREG);
 
     // now delete it not to tamper test env
     mrc->remove("/cheshire.cat");
@@ -118,7 +118,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyFile) {
 
     EXPECT_NE(findFileInVec(fVec, "virtual_particle.txt"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "virtual_particle.txt")).getSize(), 5);
-    EXPECT_EQ((*findFileInVec(fVec, "virtual_particle.txt")).getType(), CloudFile::File);
+    EXPECT_EQ((*findFileInVec(fVec, "virtual_particle.txt")).getType(), S_IFREG);
 
     // now delete it not to tamper test env
     mrc->remove("/virtual_particle.txt");
@@ -138,7 +138,7 @@ TEST(ApiIntegrationTesting, TestCreateDir) {
 
     EXPECT_NE(findFileInVec(fVec, "testDir"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "testDir")).getSize(), 0);
-    EXPECT_EQ((*findFileInVec(fVec, "testDir")).getType(), CloudFile::Directory);
+    EXPECT_EQ((*findFileInVec(fVec, "testDir")).getType(), S_IFDIR);
 
     // now delete it not to tamper test env
     mrc->remove("/testDir");
@@ -159,7 +159,7 @@ TEST(ApiIntegrationTesting, TestCreateNestedDir) {
 
     EXPECT_NE(findFileInVec(fVec, "testDir"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "testDir")).getSize(), 0);
-    EXPECT_EQ((*findFileInVec(fVec, "testDir")).getType(), CloudFile::Directory);
+    EXPECT_EQ((*findFileInVec(fVec, "testDir")).getType(), S_IFDIR);
 
     // now delete it not to tamper test env
     mrc->remove("/Mail.Ru рекомендует/testDir");
@@ -182,7 +182,7 @@ TEST(ApiIntegrationTesting, TestMoveFile) {
 
     EXPECT_NE(findFileInVec(fVec, "movedDummy.txt"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getSize(), 0);
-    EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getType(), CloudFile::File);
+    EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getType(), S_IFREG);
 
     // now delete it not to tamper test env
     mrc->remove("/movedDummy.txt");
@@ -203,7 +203,7 @@ TEST(ApiIntegrationTesting, TestMoveFileIntoNestedDir) {
 
     EXPECT_NE(findFileInVec(fVec, "movedDummy.txt"), fVec.cend());
     EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getSize(), 0);
-    EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getType(), CloudFile::File);
+    EXPECT_EQ((*findFileInVec(fVec, "movedDummy.txt")).getType(), S_IFREG);
 
     // now delete it not to tamper test env
     mrc->remove("/Mail.Ru рекомендует/movedDummy.txt");

@@ -29,7 +29,7 @@
 
 using namespace std;
 
-extern MruMetadataCache fsCache;
+extern std::string cacheDir;
 
 // definition
 std::atomic_ulong FileStorage::counter;
@@ -43,7 +43,7 @@ void FileStorage::open()
 {
     // get unique file name
     string name = to_string(counter++);
-    filename = fsCache.cacheDir + '/' + name;
+    filename = cacheDir + '/' + name;
 
     // open temporary file
     data.open(filename, ios::out | ios::in | ios::trunc | ios::binary);

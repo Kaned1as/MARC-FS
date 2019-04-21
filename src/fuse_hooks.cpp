@@ -139,7 +139,7 @@ static int handleLinks(string filePath, MarcFileNode* file) {
     if (origFileInfo.st_size > MARCFS_MAX_FILE_SIZE) {
         // it's compound, retrieve links for each part
         off_t partCount = (origFileInfo.st_size / MARCFS_MAX_FILE_SIZE) + 1;
-        doWithRetry([&](MarcRestClient *client) -> int {
+        doWithRetry([&](MarcRestClient *client) {
             for (off_t idx = 0; idx < partCount; ++idx) {
                 string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
                 link += extendedPath + ": ";
@@ -149,7 +149,7 @@ static int handleLinks(string filePath, MarcFileNode* file) {
         });
     } else {
         // single file, single link
-        doWithRetry([&](MarcRestClient *client) -> int {
+        doWithRetry([&](MarcRestClient *client) {
             link += origPath + ": ";
             link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(origPath) + '\n';
             return 0;
@@ -217,7 +217,7 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
 
     // not found in cache, find requested file on cloud
     // get a listing of a containing dir for this file
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         bool found = false;
         string dirPath = dirname + (trailingSlash ? "" : "/"); // dir with slash at the end
         auto contents = client->ls(dirPath); // actual API call - ls the directory that contains this file
@@ -258,7 +258,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
      *   uint32 f_spare[6]; // reserved
      */
 
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         auto info = client->df();
         stat->f_fsid = {}; // ignored
         stat->f_bsize = 4096; // a guess!
@@ -273,7 +273,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 int openCallback(const char *path, struct fuse_file_info *fi)
 {
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         auto file = new MarcFileNode;
         file->open(client, path);
 
@@ -296,7 +296,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 
     string pathStr(path); // e.g. /directory or /
 
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         auto contents = client->ls(pathStr);
         handleCompounds(contents);
         bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
@@ -348,7 +348,7 @@ int flushCallback(const char *path, struct fuse_file_info *fi)
     if (res)
         return res;
 
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         file->flush(client, path);
         return 0;
     });
@@ -365,7 +365,7 @@ int releaseCallback(const char *path, struct fuse_file_info *fi)
 
 int mkdirCallback(const char *path, mode_t /*mode*/)
 {
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         client->mkdir(path);
         return 0;
     });
@@ -373,7 +373,7 @@ int mkdirCallback(const char *path, mode_t /*mode*/)
 
 int rmdirCallback(const char *path)
 {
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         auto contents = client->ls(path);
         if (!contents.empty())
             return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
@@ -403,28 +403,28 @@ int unlinkCallback(const char *path)
     // 2. wait for release file .fuse_hidden{...}
     // 3.          unlink file .fuse_hidden{...}
 
-    return doWithRetry([&](MarcRestClient *client) -> int {
-        MarcFileNode(...).remove(client, path); // FIXME: check size!
-        fsCache.purgeCache(path);
+    return doWithRetry([&](MarcRestClient *client) {
+        MarcFileNode(stbuf).remove(client, path); // FIXME: check size!
         return 0;
     });
 }
 
 int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
 {
-    auto node = fsCache.getNode(oldPath);
-    if (!node || !node->exists) {
-        return -ENOENT;
-    }
-
-    MarcFileNode sourceFile(...);
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    struct stat oldStat = {};
+    int srcErr = getattrCallback(oldPath, &oldStat, nullptr);
+    if (srcErr)
+        return srcErr;
+    
+    MarcFileNode sourceFile(oldStat);
+    return doWithRetry([&](MarcRestClient *client) {
         // get info about the target
-        struct stat stbuf = {};
-        int res = getattrCallback(path, &stbuf, nullptr);
+        struct stat newStat = {};
+        int targetErr = getattrCallback(newPath, &newStat, nullptr);
+        std::cout << "aff2s" << std::endl;
 
-        if (res == 0 /* target exists */) {
-            MarcFileNode targetFile(...);
+        if (targetErr == 0 /* target exists */) {
+            MarcFileNode targetFile(newStat);
 
             if (flags & RENAME_NOREPLACE) {
                 // file exists and replacement is not allowed
@@ -460,7 +460,7 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
     }
 
     // file is not open, just reupload it with requested size
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         // imitate reupload
         MarcFileNode tempFile;
         tempFile.open(client, path);
@@ -475,7 +475,7 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
 
 int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
 {
-    return doWithRetry([&](MarcRestClient *client) -> int {
+    return doWithRetry([&](MarcRestClient *client) {
         client->create(path);
         return 0;
     });

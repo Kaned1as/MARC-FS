@@ -26,23 +26,24 @@
 #include "memory_storage.h"
 #include "file_storage.h"
 
-using namespace std;
+extern std::string cacheDir;
 
-extern MruMetadataCache fsCache;
+using namespace std;
 
 MarcFileNode::MarcFileNode()
 {
-    if (fsCache.cacheDir.empty()) {
+    if (cacheDir.empty()) {
         cachedContent.reset(new MemoryStorage);
     } else {
         cachedContent.reset(new FileStorage);
     }
 }
 
-MarcFileNode::MarcFileNode(CacheNode *cache) : MarcFileNode()
+MarcFileNode::MarcFileNode(const struct stat &stbuf) : MarcFileNode()
 {
-    oldFileSize = cache->getSize();
-    mtime = cache->getMtime();
+    // required to understand whether this file is compound or not
+    oldFileSize = stbuf.st_size;
+    mtime = stbuf.st_mtim.tv_sec;
 }
 
 void MarcFileNode::fillStat(struct stat *stbuf) {
@@ -53,12 +54,6 @@ void MarcFileNode::fillStat(struct stat *stbuf) {
 
     stbuf->st_size = static_cast<off_t>(getSize()); // offset is 32 bit on x86 platforms
     stbuf->st_blocks = getSize() / 512 + 1;
-
-#ifndef __APPLE__
-    stbuf->st_mtim.tv_sec = getMtime();
-#else
-    stbuf->st_mtimespec.tv_sec = mtime;
-#endif
 }
 
 void MarcFileNode::open(MarcRestClient *client, string path)

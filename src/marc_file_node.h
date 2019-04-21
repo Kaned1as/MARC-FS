@@ -37,7 +37,7 @@ class MarcFileNode : public MarcNode
 {
 public:
     MarcFileNode();
-    explicit MarcFileNode(CacheNode *cache);
+    explicit MarcFileNode(const struct stat &stbuf);
 
     void open(MarcRestClient *client, std::string path);
     void flush(MarcRestClient *client, std::string path);
