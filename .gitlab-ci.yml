@@ -8,10 +8,10 @@ variables:
   GIT_SSL_NO_VERIFY: "true"
 
 stages:
-  - ubuntu build
-  - ubuntu fstest
   - universal build
   - universal fstest
+  - ubuntu build
+  - ubuntu fstest
   - fedora build
   - fedora fstest
   - arch build
@@ -92,7 +92,7 @@ static binary universal build:
     - ninja -C build install
       # libfuse
     - cd $CI_PROJECT_DIR
-    - git clone https://github.com/libfuse/libfuse contrib/libfuse
+    - git clone --branch fuse-3.5.0 --depth 1 https://github.com/libfuse/libfuse contrib/libfuse
     - cd contrib/libfuse
     - meson --buildtype release --default-library static --prefix /usr -Dudevrulesdir=/nonexistent . build
     - ninja -C build install
