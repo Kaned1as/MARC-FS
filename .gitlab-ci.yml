@@ -8,8 +8,8 @@ variables:
   GIT_SSL_NO_VERIFY: "true"
 
 stages:
-#  - ubuntu build
-#  - ubuntu fstest
+  - ubuntu build
+  - ubuntu fstest
   - universal build
   - universal fstest
   - fedora build
@@ -17,8 +17,8 @@ stages:
   - arch build
   - arch fstest
 
-.binary_artifact: &common_artifacts
-  expire_in: 1 day
+.binary_artifact: &binary_artifact
+#  expire_in: 1 day
   paths:
     - build/marcfs
 
@@ -35,52 +35,48 @@ stages:
 .fstest_script: &common_fstest_script
   - su -c 'python3 fstest.py -v' - fstest
 
-# ------------------------ ubuntu > trusty doesn't have fuse3
-#build on ubuntu:
-#  image: ubuntu
-#  stage: ubuntu build
-#  dependencies: []
-#  before_script: &common_compile_debian
-#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
-#    - apt-add-repository ppa:bkryza/fuse3
-#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev
-#  script: *common_script
-#  artifacts: *common_artifacts
+build on ubuntu:
+  image: ubuntu:19.04
+  stage: ubuntu build
+  dependencies: []
+  before_script: &common_compile_debian
+    - apt-get update -qq
+    - apt-get install -y -qq software-properties-common cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev
+  script: *common_script
+  artifacts: *binary_artifact
 
-#deb package for ubuntu:
-#  image: ubuntu
-#  stage: ubuntu build
-#  dependencies: []
-#  before_script:
-#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
-#    - apt-add-repository ppa:bkryza/fuse3
-#    - apt-get update -qq && apt-get install -y -qq git cmake g++ libfuse3-dev libcurl4-gnutls-dev libjsoncpp-dev debhelper dh-make dpkg-dev
-#  script:
-#    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
-#    - export DEBEMAIL="kanedias@xaker.ru"
-#    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
-#    - dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes
-#    - cp README.md debian/README.Debian
-#    - dpkg-buildpackage -us -uc -j$(nproc)
-#    - cp ../*.deb .
-#  artifacts:
-#    paths:
-#      - "*.deb"
+deb package for ubuntu:
+  image: ubuntu:19.04
+  stage: ubuntu build
+  dependencies: []
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq software-properties-common git cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make
+  script:
+    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
+    - export DEBEMAIL="kanedias@xaker.ru"
+    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
+    - dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes
+    - cp README.md debian/README.Debian
+    - dpkg-buildpackage -us -uc -j$(nproc)
+    - cp ../*.deb .
+  artifacts:
+    paths:
+      - "*.deb"
 
-#fstest on ubuntu:
-#  image: ubuntu
-#  stage: ubuntu fstest
-#  dependencies:
-#    - build on ubuntu
-#  before_script: &common_test_debian
-#    - apt-get update -qq && apt-get install -y -qq software-properties-common python-software-properties
-#    - apt-add-repository ppa:bkryza/fuse3
-#    - apt-get update -qq && apt-get install -y -qq fuse3 libcurl3-gnutls libjsoncpp1 python3
-#    - useradd --create-home fstest
-#    - cp build/marcfs tests/fstest.py ~fstest
-#    - "chown -R fstest: ~fstest"
-#  script: *common_fstest_script
-#  after_script: *common_fstest_after
+fstest on ubuntu:
+  image: ubuntu:19.04
+  stage: ubuntu fstest
+  dependencies:
+    - build on ubuntu
+  before_script: &common_test_debian
+    - apt-get update -qq
+    - apt-get install -y -qq software-properties-common fuse3 libcurl4 libjsoncpp1 python3
+    - useradd --create-home fstest
+    - cp build/marcfs tests/fstest.py ~fstest
+    - "chown -R fstest: ~fstest"
+  script: *common_fstest_script
+  after_script: *common_fstest_after
 
 static binary universal build:
   image: alpine
@@ -127,7 +123,7 @@ static binary universal build:
     - cmake .. -DSTATIC_LINKING=ON
     - make -j$(nproc)
     - ./apitest
-  artifacts: *common_artifacts
+  artifacts: *binary_artifact
 
 static binary test:
   image: ubuntu # we should test static binary on another distro
@@ -150,7 +146,7 @@ build on fedora:
   before_script: 
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel
   script: *common_script
-  artifacts: *common_artifacts
+  artifacts: *binary_artifact
 
 rpm package for fedora:
   image: fedora
@@ -193,7 +189,7 @@ build on arch:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp
   script: *common_script
-  artifacts: *common_artifacts
+  artifacts: *binary_artifact
   
 aur package for arch:
   image: archlinux/base
