@@ -27,6 +27,35 @@
 
 using namespace std;
 
+std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
+    std::shared_lock guard(cacheLock);
+    
+    auto node = statCache.find(path);
+    if (node == statCache.end()) {
+        return std::shared_ptr<CacheNode>();
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    if (node->second->cached_since + this->cacheTtl < now) {
+        // cache expired, invalidate
+        guard.unlock();
+        std::unique_lock writeGuard(cacheLock);
+
+        statCache.erase(node);
+        return std::shared_ptr<CacheNode>();
+    }
+
+    return node->second;
+}
+
+void CacheManager::put(const std::string &path, const CacheNode &node) {
+    std::unique_lock guard(cacheLock);
+    
+    statCache[path] = std::make_shared<CacheNode>(node);
+}
+
+
+
 void fillStat(struct stat *stbuf, const CloudFile *cf) {
     auto ctx = fuse_get_context();
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated

@@ -24,7 +24,10 @@
 #include <fuse3/fuse.h>
 
 #include <shared_mutex>
-#include <vector>
+#include <memory>
+#include <chrono>
+#include <map>
+
 
 #include "object_pool.h"
 #include "marc_rest_client.h"
@@ -32,47 +35,54 @@
 
 class CloudFile;
 
-typedef std::shared_timed_mutex RwMutex;
-typedef std::shared_lock<RwMutex> RwLock;
+using namespace std::chrono_literals;
 
 struct CacheNode {
-    /**
 
+    explicit CacheNode(const struct stat &stbuf) {
+        this->stbuf = stbuf;
+    }
+
+    /**
      * @brief stbuf = Stat cache, main cache entity
      *
      */
     struct stat stbuf = {};
 
-    /**
-     * @brief exists - by default, cache node doesn't exist
-     */
-    bool exists = false;
-
-    /**
-     * @brief dir_cached - true if we this cache node is a dir and was read at least once
-     */
-    bool dir_cached = false;
-
+private:
     /**
      * @brief cached_since - marks time when this node was created
      */
-    time_t cached_since = time(nullptr);
+    std::chrono::time_point<std::chrono::steady_clock> cached_since;
 
-    inline off_t getSize() {
-        return stbuf.st_size;
+    friend class CacheManager;
+};
+
+/**
+ * 
+ */
+class CacheManager {
+public:
+
+    static CacheManager * getInstance() {
+        static CacheManager instance;
+        return &instance;
     }
 
-    inline void setSize(off_t size) {
-        stbuf.st_size = size;
-    }
+    /**
+     * 
+     */
+    void put(const std::string &path, const CacheNode &node);
 
-//    inline time_t getMtime() {
-//        return retrieveMtime(stbuf);
-//    }
+    /**
+     *
+     */
+    std::shared_ptr<CacheNode> get(const std::string &path);
+private:
+    std::shared_timed_mutex cacheLock;
 
-//    inline void setMtime(time_t mtime) {
-//        applyMtime(stbuf, mtime);
-//    }
+    std::chrono::seconds cacheTtl = 60s;
+    std::map<std::string, std::shared_ptr<CacheNode>> statCache;
 };
 
 void emptyStat(struct stat *stbuf, int type);

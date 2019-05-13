@@ -187,6 +187,10 @@ void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
 {
     conn->want |= FUSE_CAP_ASYNC_READ;
     conn->want |= FUSE_CAP_DONT_MASK;
+
+    cfg->entry_timeout = 60;
+    cfg->attr_timeout = 60;
+    cfg->negative_timeout = 60;
     return nullptr;
 }
 
@@ -215,6 +219,15 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
     string dirname = pathStr.substr(0, slashPos); // that would be /home
     string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
 
+    // try stat cache first
+    auto statCache = CacheManager::getInstance();
+    auto cached = statCache->get(pathStr);
+    if (cached) {
+        // have entry in cache, fill
+        *stbuf = cached->stbuf;
+        return 0;
+    }
+
     // not found in cache, find requested file on cloud
     // get a listing of a containing dir for this file
     return doWithRetry([&](MarcRestClient *client) {
@@ -226,11 +239,16 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
         // this may happen when calling by absolute path first (without readdir cache)
         handleCompounds(contents);
 
-        // put all retrieved files in cache
         for (CloudFile &cf : contents) {
             string fullPath = dirPath + cf.getName();
+
+            // put all retrieved files in cache    
+            struct stat temp = {};
+            fillStat(&temp, &cf);
+            statCache->put(fullPath, CacheNode(temp));
+
             if (cf.getName() == filename) {
-                // file found - fill statbuf
+                // file found
                 fillStat(stbuf, &cf);
                 found = true;
             }
@@ -239,7 +257,6 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
         if (found)
             return 0;
 
-        // not found - put negative mark in cache
         return -ENOENT;
     });
 }
@@ -301,11 +318,14 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
         handleCompounds(contents);
         bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
 
+        auto statCache = CacheManager::getInstance();
         for (const CloudFile &cf : contents) {
             string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
             struct stat stbuf = {};
             fillStat(&stbuf, &cf);
+            statCache->put(fullPath, CacheNode(stbuf));
+
             filler(dirhandle, cf.getName().data(), &stbuf, 0, (fuse_fill_dir_flags) 0);
         }
 
