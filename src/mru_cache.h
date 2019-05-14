@@ -64,6 +64,9 @@ private:
 class CacheManager {
 public:
 
+    using SharedLock = std::shared_lock<std::shared_timed_mutex>;
+    using UniqueLock = std::unique_lock<std::shared_timed_mutex>;
+
     static CacheManager * getInstance() {
         static CacheManager instance;
         return &instance;

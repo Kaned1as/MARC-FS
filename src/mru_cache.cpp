@@ -28,7 +28,7 @@
 using namespace std;
 
 std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
-    std::shared_lock guard(cacheLock);
+    SharedLock guard(cacheLock);
     
     auto node = statCache.find(path);
     if (node == statCache.end()) {
@@ -39,7 +39,7 @@ std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
     if (node->second->cached_since + this->cacheTtl < now) {
         // cache expired, invalidate
         guard.unlock();
-        std::unique_lock writeGuard(cacheLock);
+        UniqueLock writeGuard(cacheLock);
 
         statCache.erase(node);
         return std::shared_ptr<CacheNode>();
@@ -49,7 +49,7 @@ std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
 }
 
 void CacheManager::put(const std::string &path, const CacheNode &node) {
-    std::unique_lock guard(cacheLock);
+    UniqueLock guard(cacheLock);
     
     statCache[path] = std::make_shared<CacheNode>(node);
 }
