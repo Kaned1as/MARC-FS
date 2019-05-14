@@ -81,6 +81,11 @@ public:
      *
      */
     std::shared_ptr<CacheNode> get(const std::string &path);
+
+    /**
+     * 
+     */
+    void update(const std::string &path, MarcNode &node);
 private:
     std::shared_timed_mutex cacheLock;
 

@@ -345,7 +345,6 @@ int readCallback(const char *path, char *buf, size_t size, off_t offset, struct 
 {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
-
     return file->read(buf, size, offsetBytes);
 }
 
@@ -353,9 +352,7 @@ int writeCallback(const char *path, const char *buf, size_t size, off_t offset, 
 {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
-    int res = file->write(buf, size, offsetBytes);
-
-    return res;
+    return file->write(buf, size, offsetBytes);
 }
 
 
@@ -370,6 +367,7 @@ int flushCallback(const char *path, struct fuse_file_info *fi)
 
     return doWithRetry([&](MarcRestClient *client) {
         file->flush(client, path);
+        CacheManager::getInstance()->update(path, *file);
         return 0;
     });
 }
@@ -424,7 +422,7 @@ int unlinkCallback(const char *path)
     // 3.          unlink file .fuse_hidden{...}
 
     return doWithRetry([&](MarcRestClient *client) {
-        MarcFileNode(stbuf).remove(client, path); // FIXME: check size!
+        MarcFileNode(stbuf).remove(client, path);
         return 0;
     });
 }
@@ -487,7 +485,6 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
         tempFile.truncate(size);
         tempFile.flush(client, path);
         tempFile.release();
-
         return 0;
     });
 

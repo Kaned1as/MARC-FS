@@ -30,22 +30,22 @@ using namespace std;
 std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
     SharedLock guard(cacheLock);
     
-    auto node = statCache.find(path);
-    if (node == statCache.end()) {
+    auto cached = statCache.find(path);
+    if (cached == statCache.end()) {
         return std::shared_ptr<CacheNode>();
     }
 
     auto now = std::chrono::steady_clock::now();
-    if (node->second->cached_since + this->cacheTtl < now) {
+    if (cached->second->cached_since + this->cacheTtl < now) {
         // cache expired, invalidate
         guard.unlock();
         UniqueLock writeGuard(cacheLock);
 
-        statCache.erase(node);
+        statCache.erase(cached);
         return std::shared_ptr<CacheNode>();
     }
 
-    return node->second;
+    return cached->second;
 }
 
 void CacheManager::put(const std::string &path, const CacheNode &node) {
@@ -54,7 +54,16 @@ void CacheManager::put(const std::string &path, const CacheNode &node) {
     statCache[path] = std::make_shared<CacheNode>(node);
 }
 
+void CacheManager::update(const std::string &path, MarcNode &node) {
+    UniqueLock guard(cacheLock);
 
+    auto cached = statCache.find(path);
+    if (cached == statCache.end()) {
+        return;
+    }
+
+    node.fillStat(&cached->second->stbuf);
+}
 
 void fillStat(struct stat *stbuf, const CloudFile *cf) {
     auto ctx = fuse_get_context();

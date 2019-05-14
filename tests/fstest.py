@@ -191,7 +191,7 @@ class TestMarcfsFuseOperations(unittest.TestCase):
         fname, _ = self.test_write_to_file()
         plink_fname = fname + '.marcfs-link'
         with open(plink_fname, 'w'):
-            os.utime(fname, None)
+            os.utime(plink_fname, None)
         time.sleep(1)
         with open(plink_fname, 'r') as f:
             plink_text = f.read()
