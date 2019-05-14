@@ -54,6 +54,12 @@ void CacheManager::put(const std::string &path, const CacheNode &node) {
     statCache[path] = std::make_shared<CacheNode>(node);
 }
 
+void CacheManager::remove(const std::string &path) {
+    UniqueLock guard(cacheLock);
+    
+    statCache.erase(path);
+}
+
 void CacheManager::update(const std::string &path, MarcNode &node) {
     UniqueLock guard(cacheLock);
 

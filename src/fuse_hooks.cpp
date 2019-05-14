@@ -188,6 +188,7 @@ void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
     conn->want |= FUSE_CAP_ASYNC_READ;
     conn->want |= FUSE_CAP_DONT_MASK;
 
+    cfg->direct_io = 1;
     cfg->entry_timeout = 60;
     cfg->attr_timeout = 60;
     cfg->negative_timeout = 60;
@@ -397,6 +398,7 @@ int rmdirCallback(const char *path)
             return -ENOTEMPTY; // should we really? Cloud seems to be OK with it...
 
         client->remove(path);
+        CacheManager::getInstance()->remove(path);
         return 0;
     });
 }
@@ -423,6 +425,7 @@ int unlinkCallback(const char *path)
 
     return doWithRetry([&](MarcRestClient *client) {
         MarcFileNode(stbuf).remove(client, path);
+        CacheManager::getInstance()->remove(path);
         return 0;
     });
 }
@@ -439,7 +442,9 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
         // get info about the target
         struct stat newStat = {};
         int targetErr = getattrCallback(newPath, &newStat, nullptr);
-        std::cout << "aff2s" << std::endl;
+
+        CacheManager::getInstance()->remove(oldPath);
+        CacheManager::getInstance()->remove(newPath);
 
         if (targetErr == 0 /* target exists */) {
             MarcFileNode targetFile(newStat);
@@ -474,6 +479,7 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
         // file is opened, truncate it
         auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
         file->truncate(size);
+        CacheManager::getInstance()->update(path, *file);
         return 0;
     }
 
@@ -485,6 +491,7 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
         tempFile.truncate(size);
         tempFile.flush(client, path);
         tempFile.release();
+        CacheManager::getInstance()->update(path, tempFile);
         return 0;
     });
 

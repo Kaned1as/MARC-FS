@@ -39,8 +39,9 @@ using namespace std::chrono_literals;
 
 struct CacheNode {
 
-    explicit CacheNode(const struct stat &stbuf) {
-        this->stbuf = stbuf;
+    explicit CacheNode(const struct stat &stbuf)
+    : stbuf(stbuf),
+      cached_since(std::chrono::steady_clock::now()) {
     }
 
     /**
@@ -86,6 +87,7 @@ public:
      * 
      */
     void update(const std::string &path, MarcNode &node);
+    void remove(const std::string &path);
 private:
     std::shared_timed_mutex cacheLock;
 
