@@ -51,12 +51,15 @@ deb package for ubuntu:
   dependencies: []
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq software-properties-common git cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make
+    - apt-get install -y -qq software-properties-common git cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make fuse3
   script:
     - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
-    - export DEBEMAIL="kanedias@xaker.ru"
+    - export DEBEMAIL="kanedias@keemail.me"
     - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
-    - dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes
+    - "dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes"
+    - "sed -E -i 's|^Section: .*|Section: otherosfs|g' debian/control"
+    - "sed -E -i 's|^Homepage: .*|Homepage: https://gitlab.com/Kanedias/MARC-FS|g' debian/control"
+    - "sed -E -i 's|^Depends: (.*)|Depends: \\1, fuse3|g' debian/control"
     - cp README.md debian/README.Debian
     - dpkg-buildpackage -us -uc -j$(nproc)
     - cp ../*.deb .
