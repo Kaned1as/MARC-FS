@@ -30,8 +30,7 @@ extern std::string cacheDir;
 
 using namespace std;
 
-MarcFileNode::MarcFileNode()
-{
+MarcFileNode::MarcFileNode() {
     if (cacheDir.empty()) {
         cachedContent.reset(new MemoryStorage);
     } else {
@@ -39,8 +38,7 @@ MarcFileNode::MarcFileNode()
     }
 }
 
-MarcFileNode::MarcFileNode(const struct stat &stbuf) : MarcFileNode()
-{
+MarcFileNode::MarcFileNode(const struct stat &stbuf) : MarcFileNode() {
     // required to understand whether this file is compound or not
     oldFileSize = stbuf.st_size;
     mtime = stbuf.st_mtim.tv_sec;
@@ -56,8 +54,7 @@ void MarcFileNode::fillStat(struct stat *stbuf) {
     stbuf->st_blocks = getSize() / 512 + 1;
 }
 
-void MarcFileNode::open(MarcRestClient *client, string path)
-{
+void MarcFileNode::open(MarcRestClient *client, string path) {
     // open is potentially network-download operation, lock it
     unique_lock<mutex> guard(netMutex);
 
@@ -85,8 +82,7 @@ void MarcFileNode::open(MarcRestClient *client, string path)
 }
 
 
-void MarcFileNode::flush(MarcRestClient *client, string path)
-{
+void MarcFileNode::flush(MarcRestClient *client, string path) {
     // open is potentially network-upload operation, lock it
     unique_lock<mutex> guard(netMutex);
 
@@ -126,13 +122,11 @@ void MarcFileNode::flush(MarcRestClient *client, string path)
     oldFileSize = cachedContent->size();
 }
 
-int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes)
-{
+int MarcFileNode::read(char *buf, size_t size, uint64_t offsetBytes) {
     return cachedContent->read(buf, size, offsetBytes);
 }
 
-int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
-{
+int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes) {
     int res = cachedContent->write(buf, size, offsetBytes);
     if (res > 0) {
         dirty = true;
@@ -141,8 +135,7 @@ int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes)
     return res;
 }
 
-void MarcFileNode::remove(MarcRestClient *client, string path)
-{
+void MarcFileNode::remove(MarcRestClient *client, string path) {
     if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, remove each part
         off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
@@ -156,8 +149,7 @@ void MarcFileNode::remove(MarcRestClient *client, string path)
     }
 }
 
-void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath)
-{
+void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath) {
     if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, move each part
         off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
@@ -172,16 +164,14 @@ void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath
     }
 }
 
-void MarcFileNode::truncate(off_t size)
-{
+void MarcFileNode::truncate(off_t size) {
     cachedContent->truncate(size);
     // truncate doesn't open file, set size accordingly
     oldFileSize = size;
     dirty = true;
 }
 
-void MarcFileNode::release()
-{
+void MarcFileNode::release() {
     // this is called after all threads released the file
     unique_lock<mutex> guard(netMutex);
     oldFileSize = cachedContent->size(); // set cached size to last content size before clearing
@@ -189,25 +179,21 @@ void MarcFileNode::release()
     opened = false;
 }
 
-off_t MarcFileNode::getSize() const
-{
+off_t MarcFileNode::getSize() const {
     if (!cachedContent->empty())
         return cachedContent->size();
 
     return oldFileSize;
 }
 
-time_t MarcFileNode::getMtime() const
-{
+time_t MarcFileNode::getMtime() const {
     return mtime;
 }
 
-void MarcFileNode::setMtime(time_t time)
-{
+void MarcFileNode::setMtime(time_t time) {
     mtime = time;
 }
 
-bool MarcFileNode::isOpen() const
-{
+bool MarcFileNode::isOpen() const {
     return opened;
 }

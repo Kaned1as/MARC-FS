@@ -34,8 +34,8 @@
  */
 struct SpaceInfo
 {
-    size_t total = 0;
-    size_t used = 0;
+    uint64_t total = 0;
+    uint64_t used = 0;
 };
 
 /**

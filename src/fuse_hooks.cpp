@@ -19,6 +19,7 @@
  */
 
 #include <regex>
+#include <vector>
 #include <unordered_map>
 
 #include "fuse_hooks.h"
@@ -162,8 +163,7 @@ static int handleLinks(string filePath, MarcFileNode* file) {
     return 0;
 }
 
-int utimensCallback(const char *path, const struct timespec time[2], struct fuse_file_info *fi)
-{
+int utimensCallback(const char *path, const struct timespec time[2], struct fuse_file_info *fi) {
     // API doesn't support utime, only seconds
     // not sure how to update this on remote fs, so update only if it's opened now
 
@@ -177,14 +177,12 @@ int utimensCallback(const char *path, const struct timespec time[2], struct fuse
     return 0;
 }
 
-int chmodCallback(const char */*path*/, mode_t /*mode*/, fuse_file_info */*fi*/)
-{
+int chmodCallback(const char */*path*/, mode_t /*mode*/, fuse_file_info */*fi*/) {
     // stub, no access rights for your own cloud
     return 0;
 }
 
-void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
-{
+void * initCallback(fuse_conn_info *conn, fuse_config *cfg) {
     conn->want |= FUSE_CAP_ASYNC_READ;
     conn->want |= FUSE_CAP_DONT_MASK;
 
@@ -195,12 +193,11 @@ void * initCallback(fuse_conn_info *conn, fuse_config *cfg)
     return nullptr;
 }
 
-int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
-{
+int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi) {
     // retrieve path to containing dir
-    string pathStr(path); // e.g. /home/1517.svg
+    string pathStr(path);  // e.g. /home/1517.svg
 
-    if (pathStr == "/") { // special handling for root
+    if (pathStr == "/") {  // special handling for root
         emptyStat(stbuf, S_IFDIR);
         return 0;
     }
@@ -211,14 +208,14 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
         return 0;
     }
 
-    bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
-    auto slashPos = pathStr.find_last_of('/'); // that would be 5 for /home/1517.svg
+    bool trailingSlash = pathStr[pathStr.size() - 1] == '/';  // true only for '/' dir
+    auto slashPos = pathStr.find_last_of('/');                // that would be 5 for /home/1517.svg
     if (slashPos == string::npos)
         return -EIO;
 
     // get containing dir name and filename
-    string dirname = pathStr.substr(0, slashPos); // that would be /home
-    string filename = pathStr.substr(slashPos + 1); // that would be 1517.svg
+    string dirname = pathStr.substr(0, slashPos);      // that would be /home
+    string filename = pathStr.substr(slashPos + 1);    // that would be 1517.svg
 
     // try stat cache first
     auto statCache = CacheManager::getInstance();
@@ -233,8 +230,8 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
     // get a listing of a containing dir for this file
     return doWithRetry([&](MarcRestClient *client) {
         bool found = false;
-        string dirPath = dirname + (trailingSlash ? "" : "/"); // dir with slash at the end
-        auto contents = client->ls(dirPath); // actual API call - ls the directory that contains this file
+        string dirPath = dirname + (trailingSlash ? "" : "/");   // dir with slash at the end
+        auto contents = client->ls(dirPath);                     // actual API call - ls the directory that contains this file
 
         // file may be compound one here
         // this may happen when calling by absolute path first (without readdir cache)
@@ -262,8 +259,7 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi)
     });
 }
 
-int statfsCallback(const char */*path*/, struct statvfs *stat)
-{
+int statfsCallback(const char */*path*/, struct statvfs *stat) {
     /**
      *   uint32 f_bsize; // optimal transfer block size
      *   uint32 f_blocks; // total block count in fs
@@ -289,8 +285,7 @@ int statfsCallback(const char */*path*/, struct statvfs *stat)
 
 }
 
-int openCallback(const char *path, struct fuse_file_info *fi)
-{
+int openCallback(const char *path, struct fuse_file_info *fi) {
     return doWithRetry([&](MarcRestClient *client) {
         auto file = new MarcFileNode;
         file->open(client, path);
@@ -301,23 +296,21 @@ int openCallback(const char *path, struct fuse_file_info *fi)
     });
 }
 
-int opendirCallback(const char *path, fuse_file_info *fi)
-{
+int opendirCallback(const char *path, fuse_file_info *fi) {
     fi->fh = reinterpret_cast<uintptr_t>(new MarcDirNode);
     return 0;
 }
 
-int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info */*fi*/, enum fuse_readdir_flags /*flags*/)
-{
+int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info */*fi*/, enum fuse_readdir_flags /*flags*/) {
     filler(dirhandle, ".", nullptr, 0, (fuse_fill_dir_flags) 0);
     filler(dirhandle, "..", nullptr, 0, (fuse_fill_dir_flags) 0);
 
-    string pathStr(path); // e.g. /directory or /
+    string pathStr(path);   // e.g. /directory or /
 
     return doWithRetry([&](MarcRestClient *client) {
         auto contents = client->ls(pathStr);
         handleCompounds(contents);
-        bool trailingSlash = pathStr[pathStr.size() - 1] == '/'; // true only for '/' dir
+        bool trailingSlash = pathStr[pathStr.size() - 1] == '/';  // true only for '/' dir
 
         auto statCache = CacheManager::getInstance();
         for (const CloudFile &cf : contents) {
@@ -335,30 +328,26 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 }
 
 
-int releasedirCallback(const char *path, fuse_file_info *fi)
-{
+int releasedirCallback(const char *path, fuse_file_info *fi) {
     auto file = reinterpret_cast<MarcDirNode *>(fi->fh);
     delete file;
     return 0;
 }
 
-int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
-{
+int readCallback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
     return file->read(buf, size, offsetBytes);
 }
 
-int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info *fi)
-{
+int writeCallback(const char *path, const char *buf, size_t size, off_t offset, fuse_file_info *fi) {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     auto offsetBytes = static_cast<uint64_t>(offset);
     return file->write(buf, size, offsetBytes);
 }
 
 
-int flushCallback(const char *path, struct fuse_file_info *fi)
-{
+int flushCallback(const char *path, struct fuse_file_info *fi) {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
 
     // handle possible link files
@@ -373,8 +362,7 @@ int flushCallback(const char *path, struct fuse_file_info *fi)
     });
 }
 
-int releaseCallback(const char *path, struct fuse_file_info *fi)
-{
+int releaseCallback(const char *path, struct fuse_file_info *fi) {
     auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
     file->release();
     delete file;
@@ -382,16 +370,14 @@ int releaseCallback(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
-int mkdirCallback(const char *path, mode_t /*mode*/)
-{
+int mkdirCallback(const char *path, mode_t /*mode*/) {
     return doWithRetry([&](MarcRestClient *client) {
         client->mkdir(path);
         return 0;
     });
 }
 
-int rmdirCallback(const char *path)
-{
+int rmdirCallback(const char *path) {
     return doWithRetry([&](MarcRestClient *client) {
         auto contents = client->ls(path);
         if (!contents.empty())
@@ -406,8 +392,7 @@ int rmdirCallback(const char *path)
 /**
  * Unlink is only for files, directories get @ref rmdir instead
  */
-int unlinkCallback(const char *path)
-{
+int unlinkCallback(const char *path) {
     // should we check for the file first?
     struct stat stbuf = {};
     int res = getattrCallback(path, &stbuf, nullptr);
@@ -430,8 +415,7 @@ int unlinkCallback(const char *path)
     });
 }
 
-int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
-{
+int renameCallback(const char *oldPath, const char *newPath, unsigned int flags) {
     struct stat oldStat = {};
     int srcErr = getattrCallback(oldPath, &oldStat, nullptr);
     if (srcErr)
@@ -473,8 +457,7 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
     });
 }
 
-int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
-{
+int truncateCallback(const char *path, off_t size, fuse_file_info *fi) {
     if (fi && fi->fh) {
         // file is opened, truncate it
         auto file = reinterpret_cast<MarcFileNode *>(fi->fh);
@@ -497,8 +480,7 @@ int truncateCallback(const char *path, off_t size, fuse_file_info *fi)
 
 }
 
-int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/)
-{
+int mknodCallback(const char *path, mode_t /*mode*/, dev_t /*dev*/) {
     return doWithRetry([&](MarcRestClient *client) {
         client->create(path);
         return 0;

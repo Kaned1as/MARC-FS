@@ -23,18 +23,17 @@
 
 #include <string>
 
-class Account
-{
-public:
+class Account {
+ public:
     Account();
 
-    std::string getLogin() const;
+    const std::string& getLogin() const;
     void setLogin(const std::string &value);
 
-    std::string getPassword() const;
+    const std::string& getPassword() const;
     void setPassword(const std::string &value);
 
-private:
+ private:
     std::string login;
     std::string password;
 

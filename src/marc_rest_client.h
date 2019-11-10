@@ -21,6 +21,11 @@
 #ifndef API_H
 #define API_H
 
+#include <memory>
+#include <limits>
+#include <vector>
+#include <string>
+
 #include "account.h"
 #include "marc_api_shard.h"
 #include "marc_api_cloudfile.h"
@@ -76,13 +81,13 @@ public:
      * @brief setMaxDownloadRate - set maximum download rate for this client, in bytes.
      * @param rate - rate to set
      */
-    void setMaxDownloadRate(long rate);
+    void setMaxDownloadRate(uint64_t rate);
 
     /**
      * @brief setMaxUploadRate - set maximum upload rate for this client, in bytes.
      * @param rate - rate to set
      */
-    void setMaxUploadRate(long rate);
+    void setMaxUploadRate(uint64_t rate);
 
     /**
      * @brief API::login Sends auth info and initializes this API object on successful login.
@@ -154,8 +159,7 @@ public:
      * @return url to shared file as a string
      */
     std::string share(std::string remotePath);
-private:
-
+ private:
     // api helpers
 
     // generic
@@ -228,8 +232,8 @@ private:
     curl::curl_cookie cookieStore;
 
     std::string proxyUrl;
-    long maxUploadRate = 0;
-    long maxDownloadRate = 0;
+    uint64_t maxUploadRate = 0;
+    uint64_t maxDownloadRate = 0;
 
     Account authAccount;
     std::string authToken;

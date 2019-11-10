@@ -24,12 +24,11 @@
 #include <string>
 
 namespace Json {
-    class Value;
+class Value;
 }
 
-class Shard
-{
-public:
+class Shard {
+ public:
     enum class ShardType : int {
         VIDEO = 0,
         VIEW_DIRECT,
@@ -61,14 +60,14 @@ public:
         }
     }
 
-    Shard(const Json::Value &shardEntity);
+    explicit Shard(const Json::Value &shardEntity);
 
     const std::string& getUrl() const;
     const int& getCount() const;
 
-private:
+ private:
     const std::string url;
-    const int count;
+    const size_t count;
 };
 
 #endif // SHARD_H

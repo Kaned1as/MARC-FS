@@ -26,6 +26,7 @@
 #include <shared_mutex>
 #include <memory>
 #include <chrono>
+#include <string>
 #include <map>
 
 
@@ -50,7 +51,7 @@ struct CacheNode {
      */
     struct stat stbuf = {};
 
-private:
+ private:
     /**
      * @brief cached_since - marks time when this node was created
      */
@@ -63,8 +64,7 @@ private:
  * 
  */
 class CacheManager {
-public:
-
+ public:
     using SharedLock = std::shared_lock<std::shared_timed_mutex>;
     using UniqueLock = std::unique_lock<std::shared_timed_mutex>;
 
@@ -88,7 +88,7 @@ public:
      */
     void update(const std::string &path, MarcNode &node);
     void remove(const std::string &path);
-private:
+ private:
     std::shared_timed_mutex cacheLock;
 
     std::chrono::seconds cacheTtl = 60s;
@@ -98,4 +98,4 @@ private:
 void emptyStat(struct stat *stbuf, int type);
 void fillStat(struct stat *stbuf, const CloudFile *cf);
 
-#endif // MRU_METADATA_H
+#endif  // MRU_METADATA_H

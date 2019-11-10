@@ -20,27 +20,22 @@
 
 #include "account.h"
 
-Account::Account()
-{
+Account::Account() {
 
 }
 
-std::string Account::getLogin() const
-{
+const std::string& Account::getLogin() const {
     return login;
 }
 
-void Account::setLogin(const std::string &value)
-{
+void Account::setLogin(const std::string &value) {
     login = value;
 }
 
-std::string Account::getPassword() const
-{
+const std::string& Account::getPassword() const {
     return password;
 }
 
-void Account::setPassword(const std::string &value)
-{
+void Account::setPassword(const std::string &value) {
     password = value;
 }

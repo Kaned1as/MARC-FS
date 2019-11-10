@@ -21,31 +21,26 @@
 #include "memory_storage.h"
 
 #include <algorithm>
+#include <string>
 
 using namespace std;
 
-MemoryStorage::MemoryStorage()
-{
-
+MemoryStorage::MemoryStorage() {
 }
 
-void MemoryStorage::open()
-{
+void MemoryStorage::open() {
     // nothing to initialize, no-op
 }
 
-bool MemoryStorage::empty() /*const*/
-{
+bool MemoryStorage::empty() /*const*/ {
     return data.empty();
 }
 
-off_t MemoryStorage::size() /*const*/
-{
+off_t MemoryStorage::size() /*const*/ {
     return static_cast<off_t>(data.size());
 }
 
-int MemoryStorage::read(char *buf, size_t size, uint64_t offset)
-{
+int MemoryStorage::read(char *buf, size_t size, uint64_t offset) {
     auto len = data.size();
     if (offset > len)
         return 0; // requested bytes above the size
@@ -61,8 +56,7 @@ int MemoryStorage::read(char *buf, size_t size, uint64_t offset)
     return static_cast<int>(size);
 }
 
-int MemoryStorage::write(const char *buf, size_t size, uint64_t offset)
-{
+int MemoryStorage::write(const char *buf, size_t size, uint64_t offset) {
     if (offset + size > data.size()) {
         data.resize(offset + size);
     }
@@ -71,24 +65,20 @@ int MemoryStorage::write(const char *buf, size_t size, uint64_t offset)
     return static_cast<int>(size);
 }
 
-void MemoryStorage::append(const char *buf, size_t size)
-{
+void MemoryStorage::append(const char *buf, size_t size) {
     vector<char> tail(&buf[0], &buf[size]);
     data.insert(data.end(), tail.begin(), tail.end());
 }
 
-string MemoryStorage::readFully()
-{
+string MemoryStorage::readFully() {
     return string(&data.front());
 }
 
-void MemoryStorage::clear()
-{
+void MemoryStorage::clear() {
     data.clear();
     data.shrink_to_fit();
 }
 
-void MemoryStorage::truncate(off_t size)
-{
+void MemoryStorage::truncate(off_t size) {
     data.resize(static_cast<uint64_t>(size));
 }

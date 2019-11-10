@@ -34,8 +34,7 @@ extern std::string cacheDir;
 // definition
 std::atomic_ulong FileStorage::counter;
 
-FileStorage::FileStorage()
-{
+FileStorage::FileStorage() {
 
 }
 
