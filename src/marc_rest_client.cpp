@@ -61,31 +61,27 @@ const string SCLD_PUBLICLINK_ENDPOINT = CLOUD_DOMAIN + "/public";
 
 MarcRestClient::MarcRestClient()
     : restClient(make_unique<curl::curl_easy>()),
-      cookieStore(*restClient)
-{
-    cookieStore.set_file(""); // init cookie engine
-    restClient->reset(); // reset debug->std:cout function
+      cookieStore(*restClient) {
+    cookieStore.set_file("");   // init cookie engine
+    restClient->reset();        // reset debug->std:cout function
 }
 
 
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
-      cookieStore(*restClient),        // cokie_store is not copyable, init in body
-      proxyUrl(toCopy.proxyUrl), 
-      maxDownloadRate(toCopy.maxDownloadRate), 
-      maxUploadRate(toCopy.maxUploadRate), 
-      authAccount(toCopy.authAccount), // copy account from other one
-      authToken(toCopy.authToken) // copy auth token from other one
-
-{
+      cookieStore(*restClient),                 // cokie_store is not copyable, init in body
+      proxyUrl(toCopy.proxyUrl),
+      maxDownloadRate(toCopy.maxDownloadRate),
+      maxUploadRate(toCopy.maxUploadRate),
+      authAccount(toCopy.authAccount),          // copy account from other one
+      authToken(toCopy.authToken) {             // copy auth token from other one
     for (const auto &c : toCopy.cookieStore.get()) {
         restClient->add<CURLOPT_COOKIELIST>(c.data());
     }
-    cookieStore.set_file(""); // init cookie engine
+    cookieStore.set_file("");                   // init cookie engine
 }
 
-void MarcRestClient::setProxy(string proxyUrl)
-{
+void MarcRestClient::setProxy(string proxyUrl) {
     this->proxyUrl = proxyUrl;
 }
 
@@ -119,8 +115,7 @@ string MarcRestClient::paramString(Params const &params) {
     return s.str();
 }
 
-string MarcRestClient::performPost()
-{
+string MarcRestClient::performPost() {
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
 
@@ -302,7 +297,7 @@ void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashS
 
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rewrite"}, // rename is one more discovered option
+        {"conflict", "rewrite"},  // rename is one more discovered option
         {"home", remoteDir + name},
         {"hash", fileHash},
         {"size", fileSize},

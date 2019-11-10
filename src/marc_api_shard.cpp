@@ -24,13 +24,13 @@
 
 Shard::Shard(Json::Value const &shardEntity)
     : url(shardEntity[0]["url"].asString()),
-      count(shardEntity[0]["count"].asUInt()) {
+      count(std::stoi(shardEntity[0]["count"].asString())) {
 }
 
 const std::string& Shard::getUrl() const {
     return url;
 }
 
-const int& Shard::getCount() const {
+size_t Shard::getCount() const {
     return count;
 }

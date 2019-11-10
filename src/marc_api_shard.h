@@ -63,7 +63,7 @@ class Shard {
     explicit Shard(const Json::Value &shardEntity);
 
     const std::string& getUrl() const;
-    const int& getCount() const;
+    size_t getCount() const;
 
  private:
     const std::string url;

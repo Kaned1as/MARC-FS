@@ -32,12 +32,14 @@
 #include <stdexcept>
 
 class ThreadPool {
-public:
+ public:
     ThreadPool(size_t);
+    ~ThreadPool();
+
     template<class F, class... Args>
     auto enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type>;
-    ~ThreadPool();
-private:
+
+ private:
     // need to keep track of threads so we can join them
     std::vector<std::thread> workers;
     // the task queue
@@ -51,16 +53,15 @@ private:
 
 // the constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads)
-    :   stop(false)
-{
-    for(size_t i = 0; i < threads; ++i) {
+    :   stop(false) {
+    for (size_t i = 0; i < threads; ++i) {
         workers.emplace_back([this] {
-            for(;;) {
+            for (;;) {
                 std::function<void()> task;
                 {
                     std::unique_lock<std::mutex> lock(this->queue_mutex);
                     this->condition.wait(lock, [this]{ return this->stop || !this->tasks.empty(); });
-                    if(this->stop && this->tasks.empty())
+                    if (this->stop && this->tasks.empty())
                         return;
                     task = std::move(this->tasks.front());
                     this->tasks.pop();
@@ -73,8 +74,7 @@ inline ThreadPool::ThreadPool(size_t threads)
 
 // add new work item to the pool
 template<class F, class... Args>
-auto ThreadPool::enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type>
-{
+auto ThreadPool::enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type> {
     using return_type = typename std::result_of<F(Args...)>::type;
 
     auto task = std::make_shared<std::packaged_task<return_type()>>(
@@ -86,7 +86,7 @@ auto ThreadPool::enqueue(F&& f, Args&&... args) -> std::future<typename std::res
         std::unique_lock<std::mutex> lock(queue_mutex);
 
         // don't allow enqueueing after stopping the pool
-        if(stop)
+        if (stop)
             throw std::runtime_error("enqueue on stopped ThreadPool");
 
         tasks.emplace([task](){ (*task)(); });
@@ -103,7 +103,7 @@ inline ThreadPool::~ThreadPool()
         stop = true;
     }
     condition.notify_all();
-    for(std::thread &worker: workers)
+    for (std::thread &worker: workers)
         worker.join();
 }
 
