@@ -41,7 +41,7 @@ public:
 
     virtual void open() override;
     virtual bool empty() override;
-    virtual off_t size() override;
+    virtual size_t size() override;
     virtual int read(char *buf, size_t size, uint64_t offset) override;
     virtual int write(const char *buf, size_t size, uint64_t offset) override;
     virtual void append(const char *buf, size_t size) override;

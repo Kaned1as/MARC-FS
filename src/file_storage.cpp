@@ -65,7 +65,7 @@ bool FileStorage::empty()
     return true;
 }
 
-off_t FileStorage::size()
+size_t FileStorage::size()
 {
     if (!data.is_open())
         return 0;

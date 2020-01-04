@@ -68,7 +68,7 @@ public:
      * @brief size - return size of data currently in storage
      * @return size of underlying data in bytes
      */
-    virtual off_t size() = 0;
+    virtual size_t size() = 0;
 
     /**
      * @brief read - read from storage to buffer @ref buf

@@ -183,7 +183,7 @@ public:
      * @param remoteDir remote directory on cloud server
      * @param hashSize hash and size of file delimited by colon
      */
-    void addUploadedFile(std::string name, std::string remoteDir, std::string hashSize);
+    void addUploadedFile(std::string name, std::string remoteDir, std::string hash, size_t size);
 
     /**
      * @brief move - moves file from one directory to another.
@@ -224,8 +224,7 @@ public:
 
     // cURL helpers
     std::string paramString(Params const &params);
-    std::string performPost();
-
+    std::string performAction();
     void performGet(AbstractStorage &target);
 
     std::unique_ptr<curl::curl_easy> restClient;

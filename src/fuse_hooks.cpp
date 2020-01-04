@@ -286,8 +286,11 @@ int statfsCallback(const char */*path*/, struct statvfs *stat) {
 }
 
 int openCallback(const char *path, struct fuse_file_info *fi) {
+    auto statCache = CacheManager::getInstance();
+
     return doWithRetry([&](MarcRestClient *client) {
-        auto file = new MarcFileNode;
+        auto cached = statCache->get(path);
+        auto file = new MarcFileNode(cached->stbuf);
         file->open(client, path);
 
         // no errors

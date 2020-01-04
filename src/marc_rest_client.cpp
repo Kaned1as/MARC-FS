@@ -115,7 +115,7 @@ string MarcRestClient::paramString(Params const &params) {
     return s.str();
 }
 
-string MarcRestClient::performPost() {
+string MarcRestClient::performAction() {
     ostringstream stream;
     curl_ios<ostringstream> writer(stream);
 
@@ -128,6 +128,7 @@ string MarcRestClient::performPost() {
         restClient->add<CURLOPT_PROXY>(this->proxyUrl.data());
     if (this->maxUploadRate)
         restClient->add<CURLOPT_MAX_SEND_SPEED_LARGE>(this->maxUploadRate);
+        
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -147,7 +148,7 @@ string MarcRestClient::performPost() {
         throw MailApiException("Couldn't perform request!");
     }
     int64_t ret = restClient->get_info<CURLINFO_RESPONSE_CODE>().get();
-    if (ret != 302 && ret != 200) {  // OK or redirect
+    if (ret != 302 && ret != 200 && ret != 201) {  // OK or redirect
         throw MailApiException("Non-success return code! Error message body: " + stream.str(), ret);
     }
 
@@ -221,7 +222,7 @@ void MarcRestClient::create(string remotePath) {
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     // add zero file, special hash
-    addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000;0");
+    addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000", 0);
 }
 
 void MarcRestClient::authenticate() {
@@ -231,10 +232,11 @@ void MarcRestClient::authenticate() {
     form.add(NV_PAIR("Login", authAccount.login));
     form.add(NV_PAIR("Password", authAccount.password));
     form.add(NV_PAIR("Domain", string("mail.ru")));
+    form.add(NV_PAIR("new_auth_form", string("1")));
 
     restClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
-    performPost();
+    performAction();
 
     if (cookieStore.get().empty())  // no cookies received, halt
         throw MailApiException("Failed to authenticate " + authAccount.login + " in mail.ru domain!");
@@ -248,17 +250,21 @@ void MarcRestClient::obtainCloudCookie() {
 
     restClient->add<CURLOPT_URL>(SCLD_COOKIE_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
-    performPost();
+    performAction();
 
     if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
         throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
+    
+    for (auto cookie: cookieStore.get()) {
+        cout << cookie << endl;
+    }
 }
 
 void MarcRestClient::obtainAuthToken() {
     using Json::Value;
 
     restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
-    string answer = performPost();
+    string answer = performAction();
 
     Value response;
     istringstream(answer) >> response;
@@ -274,7 +280,7 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type) {
 
     string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
     restClient->add<CURLOPT_URL>(url.data());
-    string answer = performPost();
+    string answer = performAction();
 
     Value response;
     istringstream(answer) >> response;
@@ -286,33 +292,25 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type) {
     throw MailApiException("Non-Shard json received: " + answer);
 }
 
-void MarcRestClient::addUploadedFile(string name, string remoteDir, string hashSize) {
-    auto index = hashSize.find(';');
-    auto endIndex = hashSize.find('\r');
-    if (index == string::npos)
-        throw MailApiException("Non-hashsize answer received: " + hashSize);
-
-    string fileHash = hashSize.substr(0, index);
-    string fileSize = hashSize.substr(index + 1, endIndex - (index + 1));
-
+void MarcRestClient::addUploadedFile(string name, string remoteDir, string hash, size_t size) {
     string postFields = paramString({
-        {"api", "2"},
-        {"conflict", "rewrite"},  // rename is one more discovered option
+        {"hash", hash},
+        {"size", to_string(size)},
         {"home", remoteDir + name},
-        {"hash", fileHash},
-        {"size", fileSize},
+        {"conflict", "rewrite"},  // also: rename, strict
+        {"api", "2"},
         {"token", authToken}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    performPost();
+    performAction();
 }
 
 void MarcRestClient::move(string whatToMove, string whereToMove) {
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rewrite"},  // rename is one more discovered option
+        {"conflict", "rewrite"},  // also: rename, strict
         {"folder", whereToMove},
         {"home", whatToMove},
         {"token", authToken}
@@ -320,7 +318,7 @@ void MarcRestClient::move(string whatToMove, string whereToMove) {
 
     restClient->add<CURLOPT_URL>(SCLD_MOVEFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    performPost();
+    performAction();
 }
 
 void MarcRestClient::remove(string remotePath) {
@@ -332,7 +330,7 @@ void MarcRestClient::remove(string remotePath) {
 
     restClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    performPost();
+    performAction();
 }
 
 SpaceInfo MarcRestClient::df() {
@@ -344,7 +342,7 @@ SpaceInfo MarcRestClient::df() {
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
-    string answer = performPost();
+    string answer = performAction();
 
     SpaceInfo result;
     Value response;
@@ -371,7 +369,7 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath) {
 
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rewrite"}, // rename is one more discovered option
+        {"conflict", "rewrite"}, // also: rename, strict
         {"home", oldRemotePath},
         {"name", newFilename},
         {"token", authToken}
@@ -379,7 +377,7 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath) {
 
     restClient->add<CURLOPT_URL>(SCLD_RENAMEFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    performPost();
+    performAction();
 
     // FIXME: think about version that doesn't rewrite file with name == newFilename
     // placed in the old dir.
@@ -400,7 +398,7 @@ string MarcRestClient::share(string remotePath) {
 
     restClient->add<CURLOPT_URL>(SCLD_PUBLISHFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    string answer = performPost();
+    string answer = performAction();
 
     Value response;
     istringstream(answer) >> response;
@@ -432,17 +430,14 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
 
     // fileupload part
     curl_form nameForm;
-    off_t realSize = min(body.size() - start, count);  // size to transfer
-    ReadData ptr {&body, start, min(body.size(), start + count)};
-    nameForm.add(curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, "file"),
-                 curl_pair<CURLformoption, string>(CURLFORM_FILENAME, filename),
-                 curl_pair<CURLformoption, char *>(CURLFORM_STREAM, reinterpret_cast<char *>(&ptr)),
-                 curl_pair<CURLformoption, long>(CURLFORM_CONTENTSLENGTH, realSize));
+    off_t realSize = min(static_cast<off_t>(body.size()) - start, count);  // size to transfer
+    ReadData ptr {&body, start, min(static_cast<off_t>(body.size()), start + count)};
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
-
-    // done via READFUNCTION because BUFFERPTR copies data inside cURL lib
-    restClient->add<CURLOPT_HTTPPOST>(nameForm.get());
+    restClient->add<CURLOPT_PUT>(1L);
+    restClient->add<CURLOPT_UPLOAD>(1L);
+    restClient->add<CURLOPT_INFILESIZE_LARGE>(realSize);
+    restClient->add<CURLOPT_READDATA>(&ptr);
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto source = static_cast<ReadData *>(userp);
         auto target = static_cast<char *>(contents);
@@ -453,22 +448,22 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
         source->offset += transferred;
         return transferred;
     });
-    string answer = performPost();
+    string answer = performAction();
 
-    addUploadedFile(filename, parentDir, answer);
+    addUploadedFile(filename, parentDir, answer, realSize);
 }
 
 void MarcRestClient::mkdir(string remotePath) {
     string postFields = paramString({
         {"api", "2"},
-        {"conflict", "rewrite"},  // rename is one more discovered option
+        {"conflict", "rewrite"},  // also: rename, strict
         {"home", remotePath},
         {"token", authToken}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    performPost();
+    performAction();
 }
 
 vector<CloudFile> MarcRestClient::ls(string remotePath) {
@@ -482,7 +477,7 @@ vector<CloudFile> MarcRestClient::ls(string remotePath) {
     });
 
     restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    string answer = performPost();
+    string answer = performAction();
 
     vector<CloudFile> results;
     Value response;

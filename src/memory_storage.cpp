@@ -36,8 +36,8 @@ bool MemoryStorage::empty() /*const*/ {
     return data.empty();
 }
 
-off_t MemoryStorage::size() /*const*/ {
-    return static_cast<off_t>(data.size());
+size_t MemoryStorage::size() /*const*/ {
+    return data.size();
 }
 
 int MemoryStorage::read(char *buf, size_t size, uint64_t offset) {
