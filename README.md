@@ -46,11 +46,11 @@ If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncF
     $ cp whatever /path/to/decrypted/dir
     $ # at this point encrypted data will appear in Cloud Mail.ru storage
 
-If you want to use rsync to synchronize local and remote sides, use `--sizes-only` option. 
+If you want to use rsync to synchronize local and remote sides, use `--sizes-only` or `--modify-window=1` options. 
 Rsync compares mtime and size of file by default, but Mail.ru Cloud saves only seconds in mtime, 
 which causes false-positives and reuploads of identical files:
 
-    $ rsync -av --delete --size-only /path/to/local/folder/ ~/path/to/mount/folder
+    $ rsync -av --delete --modify-window=1 /path/to/local/folder/ ~/path/to/mount/folder
 
 To unmount previously mounted share, make sure no one uses it and execute:
 
