@@ -105,26 +105,139 @@ TEST(ApiIntegrationTesting, TestCreateFile) {
     EXPECT_TRUE(findFileInVec(fVec2, "cheshire.cat") == fVec2.cend());
 }
 
-TEST(ApiIntegrationTesting, TestCreateNonEmptyFile) {
+TEST(ApiIntegrationTesting, TestCreateNonEmptyTinyFile) {
     auto mrc = setUpMrc();
+    
     MemoryStorage vpar;
     vpar.append("Here\n", 5);
-    mrc->upload("/virtual_particle.txt", vpar);
+    mrc->upload("/tiny_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
     auto findFileInVec = [&](const auto &vec, string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
-    EXPECT_NE(findFileInVec(fVec, "virtual_particle.txt"), fVec.cend());
-    EXPECT_EQ((*findFileInVec(fVec, "virtual_particle.txt")).getSize(), 5);
-    EXPECT_EQ((*findFileInVec(fVec, "virtual_particle.txt")).getType(), S_IFREG);
+    EXPECT_NE(findFileInVec(fVec, "tiny_file.txt"), fVec.cend());
+    EXPECT_EQ((*findFileInVec(fVec, "tiny_file.txt")).getSize(), 5);
+    EXPECT_EQ((*findFileInVec(fVec, "tiny_file.txt")).getType(), S_IFREG);
+
+    MemoryStorage vpar2;
+    mrc->download("/tiny_file.txt", vpar2);
+    EXPECT_EQ(vpar2.readFully(), "Here\n");
 
     // now delete it not to tamper test env
-    mrc->remove("/virtual_particle.txt");
+    mrc->remove("/tiny_file.txt");
     auto fVec2 = mrc->ls("/");
 
-    EXPECT_TRUE(findFileInVec(fVec2, "virtual_particle.txt") == fVec2.cend());
+    EXPECT_TRUE(findFileInVec(fVec2, "tiny_file.txt") == fVec2.cend());
+}
+
+TEST(ApiIntegrationTesting, TestCreateNonEmptyAlmost20File) {
+    auto mrc = setUpMrc();
+    
+    MemoryStorage vpar;
+    vpar.append("19  bytes  in  size", 19);
+    mrc->upload("/small_file.txt", vpar);
+    auto fVec = mrc->ls("/");
+
+    auto findFileInVec = [&](const auto &vec, string arg) {
+        return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
+    };
+
+    EXPECT_NE(findFileInVec(fVec, "small_file.txt"), fVec.cend());
+    EXPECT_EQ((*findFileInVec(fVec, "small_file.txt")).getSize(), 19);
+    EXPECT_EQ((*findFileInVec(fVec, "small_file.txt")).getType(), S_IFREG);
+
+    MemoryStorage vpar2;
+    mrc->download("/small_file.txt", vpar2);
+    EXPECT_EQ(vpar2.readFully(), "19  bytes  in  size");
+
+    // now delete it not to tamper test env
+    mrc->remove("/small_file.txt");
+    auto fVec2 = mrc->ls("/");
+
+    EXPECT_TRUE(findFileInVec(fVec2, "small_file.txt") == fVec2.cend());
+}
+
+TEST(ApiIntegrationTesting, TestCreateNonEmptyExactly20File) {
+    auto mrc = setUpMrc();
+    
+    MemoryStorage vpar;
+    vpar.append("20  bytes   in  size", 20);
+    mrc->upload("/20_file.txt", vpar);
+    auto fVec = mrc->ls("/");
+
+    auto findFileInVec = [&](const auto &vec, string arg) {
+        return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
+    };
+
+    EXPECT_NE(findFileInVec(fVec, "20_file.txt"), fVec.cend());
+    EXPECT_EQ((*findFileInVec(fVec, "20_file.txt")).getSize(), 20);
+    EXPECT_EQ((*findFileInVec(fVec, "20_file.txt")).getType(), S_IFREG);
+
+    MemoryStorage vpar2;
+    mrc->download("/20_file.txt", vpar2);
+    EXPECT_EQ(vpar2.readFully(), "20  bytes   in  size");
+
+    // now delete it not to tamper test env
+    mrc->remove("/20_file.txt");
+    auto fVec2 = mrc->ls("/");
+
+    EXPECT_TRUE(findFileInVec(fVec2, "20_file.txt") == fVec2.cend());
+}
+
+TEST(ApiIntegrationTesting, TestCreateNonEmptyExactly21File) {
+    auto mrc = setUpMrc();
+    
+    MemoryStorage vpar;
+    vpar.append("21   bytes   in  size", 21);
+    mrc->upload("/21_file.txt", vpar);
+    auto fVec = mrc->ls("/");
+
+    auto findFileInVec = [&](const auto &vec, string arg) {
+        return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
+    };
+
+    EXPECT_NE(findFileInVec(fVec, "21_file.txt"), fVec.cend());
+    EXPECT_EQ((*findFileInVec(fVec, "21_file.txt")).getSize(), 21);
+    EXPECT_EQ((*findFileInVec(fVec, "21_file.txt")).getType(), S_IFREG);
+
+    MemoryStorage vpar2;
+    mrc->download("/21_file.txt", vpar2);
+    EXPECT_EQ(vpar2.readFully(), "21   bytes   in  size");
+
+    // now delete it not to tamper test env
+    mrc->remove("/21_file.txt");
+    auto fVec2 = mrc->ls("/");
+
+    EXPECT_TRUE(findFileInVec(fVec2, "21_file.txt") == fVec2.cend());
+}
+
+TEST(ApiIntegrationTesting, TestCreateNonEmptyBigFile) {
+    auto mrc = setUpMrc();
+    
+    MemoryStorage vpar;
+    vpar.append("There's one for the money, and two for the sin", 46);
+    mrc->upload("/medium_file.txt", vpar);
+    auto fVec = mrc->ls("/");
+
+    auto findFileInVec = [&](const auto &vec, string arg) {
+        return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
+    };
+
+    EXPECT_NE(findFileInVec(fVec, "medium_file.txt"), fVec.cend());
+    EXPECT_EQ((*findFileInVec(fVec, "medium_file.txt")).getSize(), 46);
+    EXPECT_EQ((*findFileInVec(fVec, "medium_file.txt")).getType(), S_IFREG);
+
+    MemoryStorage vpar2;
+    mrc->download("/medium_file.txt", vpar2);
+    EXPECT_EQ(vpar2.readFully(), "There's one for the money, and two for the sin");
+
+    // now delete it not to tamper test env
+    mrc->remove("/medium_file.txt");
+    auto fVec2 = mrc->ls("/");
+
+    EXPECT_TRUE(findFileInVec(fVec2, "medium_file.txt") == fVec2.cend());
 }
 
 TEST(ApiIntegrationTesting, TestCreateDir) {
@@ -146,7 +259,6 @@ TEST(ApiIntegrationTesting, TestCreateDir) {
 
     EXPECT_TRUE(findFileInVec(fVec2, "testDir") == fVec2.cend());
 }
-
 
 TEST(ApiIntegrationTesting, TestCreateNestedDir) {
     auto mrc = setUpMrc();

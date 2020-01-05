@@ -21,6 +21,7 @@
 #include <json/json.h>
 
 #include <iterator>
+#include <iomanip>
 #include <memory>
 #include <algorithm>
 
@@ -58,6 +59,24 @@ static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
 static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
 const string SCLD_PUBLICLINK_ENDPOINT = CLOUD_DOMAIN + "/public";
+
+static string toPadded40Hex(const std::string& s) {
+    if (s.length() >= 40) {
+        throw MailApiException("String is too long");
+    }
+    
+    // fill the stream
+    std::ostringstream ret;
+    for (std::string::size_type i = 0; i < s.length(); ++i)
+        ret << std::hex << std::setfill('0') << std::setw(2) << std::uppercase << (uint32_t) s[i];
+
+    size_t remaining = 40 - ret.tellp();
+    if (remaining > 0) {
+        ret << std::setw(remaining) << 0;
+    }
+
+    return ret.str();
+}
 
 MarcRestClient::MarcRestClient()
     : restClient(make_unique<curl::curl_easy>()),
@@ -254,10 +273,6 @@ void MarcRestClient::obtainCloudCookie() {
 
     if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
         throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
-    
-    for (auto cookie: cookieStore.get()) {
-        cout << cookie << endl;
-    }
 }
 
 void MarcRestClient::obtainAuthToken() {
@@ -425,6 +440,13 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
     string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
+    if (body.size() <= 20) {
+        // Mail.ru Cloud has special handling for files that are less than 40 bytes in size
+        string content = body.readFully();
+        addUploadedFile(filename, parentDir, toPadded40Hex(content), body.size());
+        return;
+    }
+
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
     string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
@@ -434,9 +456,8 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
     ReadData ptr {&body, start, min(static_cast<off_t>(body.size()), start + count)};
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
-    restClient->add<CURLOPT_PUT>(1L);
     restClient->add<CURLOPT_UPLOAD>(1L);
-    restClient->add<CURLOPT_INFILESIZE_LARGE>(realSize);
+    //restClient->add<CURLOPT_INFILESIZE_LARGE>(realSize);
     restClient->add<CURLOPT_READDATA>(&ptr);
     restClient->add<CURLOPT_READFUNCTION>([](void *contents, size_t size, size_t nmemb, void *userp) {
         auto source = static_cast<ReadData *>(userp);

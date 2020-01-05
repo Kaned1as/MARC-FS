@@ -66,12 +66,12 @@ int MemoryStorage::write(const char *buf, size_t size, uint64_t offset) {
 }
 
 void MemoryStorage::append(const char *buf, size_t size) {
-    vector<char> tail(&buf[0], &buf[size]);
+    vector<char> tail(buf, buf + size);
     data.insert(data.end(), tail.begin(), tail.end());
 }
 
 string MemoryStorage::readFully() {
-    return string(&data.front());
+    return string(&data.front(), data.size());
 }
 
 void MemoryStorage::clear() {
