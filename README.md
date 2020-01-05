@@ -1,5 +1,5 @@
 [![Gitter](https://img.shields.io/gitter/room/MARC-FS/MARC-FS.svg)](https://gitter.im/MARC-FS/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![build status](https://gitlab.com/Kanedias/MARC-FS/badges/master/build.svg)](https://gitlab.com/Kanedias/MARC-FS/commits/master)
+[![build status](https://gitlab.com/Kanedias/MARC-FS/badges/master/pipeline.svg)](https://gitlab.com/Kanedias/MARC-FS/commits/master)
 [![License](https://img.shields.io/aur/license/marcfs-git.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Fedora RPM package](https://img.shields.io/badge/Fedora-RPM-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=rpm+package+for+fedora)
 [![Ubuntu DEB package](https://img.shields.io/badge/Ubuntu-DEB-brightgreen.svg)](https://gitlab.com/Kanedias/MARC-FS/-/jobs/artifacts/master/download?job=deb+package+for+ubuntu)
@@ -46,7 +46,7 @@ If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncF
     $ cp whatever /path/to/decrypted/dir
     $ # at this point encrypted data will appear in Cloud Mail.ru storage
 
-If you want to use rsync to synchronize local and remote sides, use `--sizes-only` or `--modify-window=1` options. 
+If you want to use rsync to synchronize local and remote sides, use `--size-only` or `--modify-window=1` options. 
 Rsync compares mtime and size of file by default, but Mail.ru Cloud saves only seconds in mtime, 
 which causes false-positives and reuploads of identical files:
 
@@ -138,7 +138,6 @@ Bugs & Known issues
   - No extended attr/chmod support, all files on storage are owned by you
   - No atime/ctime support, only mtime is stored
   - No mtime support for directories, expect all of them to have `Jan 1 1970` date in `ls`
-  - No `Transfer-Encoding: chunked` support for POST **requests** in cloud nginx (`chunkin on`/`proxy_request_buffering` options in `nginx`/`tengine` config), so files are read fully into memory before uploading
 
 Contributions
 ------------
