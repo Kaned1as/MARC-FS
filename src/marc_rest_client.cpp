@@ -441,7 +441,7 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
     string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     if (body.size() <= 20) {
-        // Mail.ru Cloud has special handling for files that are less than 40 bytes in size
+        // Mail.ru Cloud has special handling for files that are no more than 20 bytes in size
         string content = body.readFully();
         addUploadedFile(filename, parentDir, toPadded40Hex(content), body.size());
         return;
