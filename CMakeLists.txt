@@ -4,9 +4,9 @@ aux_source_directory(src SRC_LIST)
 
 # Options
 option(USE_JEMALLOC "Whether to use jemalloc" FALSE)
+option(STATIC_LINKING "Build a static binary" FALSE)
 
 # determine, whether we want a static binary
-set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
 if(STATIC_LINKING)
     set(BUILD_SHARED_LIBS OFF)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
