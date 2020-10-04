@@ -18,7 +18,7 @@ stages:
 .build_script: &common_script
   - mkdir build
   - cd build
-  - cmake ..
+  - cmake -DTESTS=ON ..
   - make -j$(nproc)
   - ./apitest
 
@@ -129,7 +129,7 @@ static binary universal build:
   script:
     - mkdir build
     - cd build
-    - cmake .. -DSTATIC_LINKING=ON
+    - cmake .. -DSTATIC_LINKING=ON -DTESTS=ON
     - make -j$(nproc)
     - ./apitest
   artifacts: *binary_artifact

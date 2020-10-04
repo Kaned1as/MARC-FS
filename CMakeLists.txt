@@ -5,6 +5,7 @@ aux_source_directory(src SRC_LIST)
 # Options
 option(USE_JEMALLOC "Whether to use jemalloc" FALSE)
 option(STATIC_LINKING "Build a static binary" FALSE)
+option(TESTS "Compile tests" FALSE)
 
 # determine, whether we want a static binary
 if(STATIC_LINKING)
@@ -29,7 +30,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 # internal libs and packages #
 #                            #
 
-
 # Curl C++ bindings
 find_package(CURLCPP)
 if(NOT CURLCPP_FOUND)
@@ -44,9 +44,11 @@ else(NOT CURLCPP_FOUND)
 endif(NOT CURLCPP_FOUND)
 
 # Googletest bindings
-add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
-include_directories(${gtest_SOURCE_DIR}/include)
-list(APPEND TEST_LIBS gtest_main)
+if(TESTS)
+    add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
+    include_directories(${gtest_SOURCE_DIR}/include)
+    list(APPEND TEST_LIBS gtest_main)
+endif(TESTS)
 
 #                            #
 # external libs and packages #
@@ -88,9 +90,11 @@ endif(USE_JEMALLOC)
 # first, run tests
 set(SRC_NO_MAIN ${SRC_LIST})
 list(REMOVE_ITEM SRC_NO_MAIN src/main.cpp)
-add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
-target_link_libraries(apitest ${TEST_LIBS})
-add_test(NAME rest_api_test COMMAND apitest)
+if(TESTS)
+    add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
+    target_link_libraries(apitest ${TEST_LIBS})
+    add_test(NAME rest_api_test COMMAND apitest)
+endif(TESTS)
 
 # final binary
 add_executable(marcfs ${SRC_LIST})
