@@ -31,10 +31,17 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 
 
 # Curl C++ bindings
-add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
-include_directories(${CURLCPP_SOURCE_DIR}/include)
-list(APPEND REQUIRED_LIBS curlcpp)
-list(APPEND TEST_LIBS curlcpp)
+find_package(CURLCPP)
+if(NOT CURLCPP_FOUND)
+    add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
+    list(APPEND REQUIRED_LIBS curlcpp)
+    list(APPEND TEST_LIBS curlcpp)
+    include_directories(${CURLCPP_SOURCE_DIR}/include)
+else(NOT CURLCPP_FOUND)
+    list(APPEND REQUIRED_LIBS ${CURLCPP_LIBRARIES})
+    list(APPEND TEST_LIBS ${CURLCPP_LIBRARIES})
+    include_directories(${CURLCPP_INCLUDE_DIR})
+endif(NOT CURLCPP_FOUND)
 
 # Googletest bindings
 add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
