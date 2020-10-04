@@ -2,6 +2,9 @@ project(MARC-FS)
 cmake_minimum_required(VERSION 2.8)
 aux_source_directory(src SRC_LIST)
 
+# Options
+option(USE_JEMALLOC "Whether to use jemalloc" FALSE)
+
 # determine, whether we want a static binary
 set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
 if(STATIC_LINKING)
@@ -66,12 +69,14 @@ if(STATIC_LINKING)
 endif()
 
 # JEMALLOC - optional
-find_package(JEMALLOC)
-if(JEMALLOC_FOUND)
-  include_directories(${JEMALLOC_INCLUDE_DIRS})
-else()
-    message(WARNING "jemalloc not found but highly recommended")
-endif()
+if(USE_JEMALLOC)
+    find_package(JEMALLOC)
+    if(JEMALLOC_FOUND)
+        include_directories(${JEMALLOC_INCLUDE_DIRS})
+    else()
+        message(WARNING "jemalloc not found but highly recommended")
+    endif()
+endif(USE_JEMALLOC)
 
 # first, run tests
 set(SRC_NO_MAIN ${SRC_LIST})
@@ -85,8 +90,10 @@ add_executable(marcfs ${SRC_LIST})
 target_link_libraries(marcfs ${REQUIRED_LIBS})
 
 # optional libs
-if(JEMALLOC_FOUND)
-    target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
-endif()
+if(USE_JEMALLOC)
+    if(JEMALLOC_FOUND)
+        target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
+    endif()
+endif(USE_JEMALLOC)
 
 install(TARGETS marcfs RUNTIME DESTINATION bin)
