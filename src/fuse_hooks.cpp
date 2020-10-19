@@ -38,8 +38,6 @@ const static std::regex SHARE_LINK_REGEX("(.+)(\\.marcfs-link)(.*)");
 ObjectPool<MarcRestClient> clientPool;
 std::string cacheDir;
 
-using namespace std;
-
 static int doWithRetry(std::function<int(MarcRestClient *)> what) {
     uint retries = 3;
 
@@ -48,7 +46,7 @@ static int doWithRetry(std::function<int(MarcRestClient *)> what) {
             auto client = clientPool.acquire();
             return what(client.get());
         } catch (MailApiException &exc) {
-            cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << endl;
+            std::cerr << "Error in " << __FUNCTION__ << ": " << exc.what() << std::endl;
             if (exc.getResponseCode() >= 500) {
                 retries--;
                 continue;
@@ -81,15 +79,15 @@ static int doWithRetry(std::function<int(MarcRestClient *)> what) {
  * @param dirPath - path to containing dir
  * @param files - vector to mutate
  */
-void handleCompounds(vector<CloudFile> &files) {
-    unordered_map<string, CloudFile> compounds;
+void handleCompounds(std::vector<CloudFile> &files) {
+    std::unordered_map<std::string, CloudFile> compounds;
     auto newEnd = remove_if(files.begin(), files.end(), [&](CloudFile &file){
-        string fileName = file.getName();
+        std::string fileName = file.getName();
 
         // detect compounds
-        smatch match;
+        std::smatch match;
         if (regex_match(fileName, match, COMPOUND_REGEX)) {
-            string origName = match[1];
+            std::string origName = match[1];
 
             if (compounds.find(origName) == compounds.end()) {
                 auto complex = CloudFile(file);
@@ -123,26 +121,26 @@ void handleCompounds(vector<CloudFile> &files) {
  * @param filePath - path to the link file
  * @param file - cached link file node
  */
-static int handleLinks(string filePath, MarcFileNode* file) {
-    smatch match;
+static int handleLinks(std::string filePath, MarcFileNode* file) {
+    std::smatch match;
     if (!regex_match(filePath, match, SHARE_LINK_REGEX)) {
         return 0;
     }
 
-    string origPath = match[1];
+    std::string origPath = match[1];
     // string linkType = match[3];
 
     // get info of original file
     struct stat origFileInfo = {};
     getattrCallback(origPath.data(), &origFileInfo, nullptr);
 
-    string link;
+    std::string link;
     if (origFileInfo.st_size > MARCFS_MAX_FILE_SIZE) {
         // it's compound, retrieve links for each part
         off_t partCount = (origFileInfo.st_size / MARCFS_MAX_FILE_SIZE) + 1;
         doWithRetry([&](MarcRestClient *client) {
             for (off_t idx = 0; idx < partCount; ++idx) {
-                string extendedPath = origPath + MARCFS_SUFFIX + to_string(idx);
+                std::string extendedPath = origPath + MARCFS_SUFFIX + std::to_string(idx);
                 link += extendedPath + ": ";
                 link += SCLD_PUBLICLINK_ENDPOINT + '/' + client->share(extendedPath) + '\n';
             }
@@ -195,7 +193,7 @@ void * initCallback(fuse_conn_info *conn, fuse_config *cfg) {
 
 int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi) {
     // retrieve path to containing dir
-    string pathStr(path);  // e.g. /home/1517.svg
+    std::string pathStr(path);  // e.g. /home/1517.svg
 
     if (pathStr == "/") {  // special handling for root
         emptyStat(stbuf, S_IFDIR);
@@ -210,12 +208,12 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi) {
 
     bool trailingSlash = pathStr[pathStr.size() - 1] == '/';  // true only for '/' dir
     auto slashPos = pathStr.find_last_of('/');                // that would be 5 for /home/1517.svg
-    if (slashPos == string::npos)
+    if (slashPos == std::string::npos)
         return -EIO;
 
     // get containing dir name and filename
-    string dirname = pathStr.substr(0, slashPos);      // that would be /home
-    string filename = pathStr.substr(slashPos + 1);    // that would be 1517.svg
+    std::string dirname = pathStr.substr(0, slashPos);      // that would be /home
+    std::string filename = pathStr.substr(slashPos + 1);    // that would be 1517.svg
 
     // try stat cache first
     auto statCache = CacheManager::getInstance();
@@ -230,7 +228,7 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi) {
     // get a listing of a containing dir for this file
     return doWithRetry([&](MarcRestClient *client) {
         bool found = false;
-        string dirPath = dirname + (trailingSlash ? "" : "/");   // dir with slash at the end
+        std::string dirPath = dirname + (trailingSlash ? "" : "/");   // dir with slash at the end
         auto contents = client->ls(dirPath);                     // actual API call - ls the directory that contains this file
 
         // file may be compound one here
@@ -238,9 +236,9 @@ int getattrCallback(const char *path, struct stat *stbuf, fuse_file_info *fi) {
         handleCompounds(contents);
 
         for (CloudFile &cf : contents) {
-            string fullPath = dirPath + cf.getName();
+            std::string fullPath = dirPath + cf.getName();
 
-            // put all retrieved files in cache    
+            // put all retrieved files in cache
             struct stat temp = {};
             fillStat(&temp, &cf);
             statCache->put(fullPath, CacheNode(temp));
@@ -308,7 +306,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
     filler(dirhandle, ".", nullptr, 0, (fuse_fill_dir_flags) 0);
     filler(dirhandle, "..", nullptr, 0, (fuse_fill_dir_flags) 0);
 
-    string pathStr(path);   // e.g. /directory or /
+    std::string pathStr(path);   // e.g. /directory or /
 
     return doWithRetry([&](MarcRestClient *client) {
         auto contents = client->ls(pathStr);
@@ -317,7 +315,7 @@ int readdirCallback(const char *path, void *dirhandle, fuse_fill_dir_t filler, o
 
         auto statCache = CacheManager::getInstance();
         for (const CloudFile &cf : contents) {
-            string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
+            std::string fullPath = pathStr + (trailingSlash ? "" : "/") + cf.getName();
 
             struct stat stbuf = {};
             fillStat(&stbuf, &cf);
@@ -443,9 +441,9 @@ int renameCallback(const char *oldPath, const char *newPath, unsigned int flags)
 
             if (flags & RENAME_EXCHANGE) {
                 // exchange source and target
-                targetFile.rename(client, newPath, string(newPath) + ".marcfs-temp");
+                targetFile.rename(client, newPath, std::string(newPath) + ".marcfs-temp");
                 sourceFile.rename(client, oldPath, newPath);
-                targetFile.rename(client, string(newPath) + ".marcfs-temp", oldPath);
+                targetFile.rename(client, std::string(newPath) + ".marcfs-temp", oldPath);
                 return 0;
             }
 

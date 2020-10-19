@@ -237,7 +237,7 @@ public:
     Account authAccount;
     std::string authToken;
 
-    int64_t verbose = 0;
+    int64_t verbose = 1;
 };
 
 #endif // API_H

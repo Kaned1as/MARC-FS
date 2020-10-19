@@ -24,9 +24,6 @@
 #include "marc_node.h"
 #include "utils.h"
 
-
-using namespace std;
-
 MarcNode::MarcNode()
 {
 
@@ -37,7 +34,7 @@ MarcNode::~MarcNode()
 
 }
 
-void MarcNode::fillStat(struct stat *stbuf) 
+void MarcNode::fillStat(struct stat *stbuf)
 {
     auto ctx = fuse_get_context();
     stbuf->st_uid = ctx->uid; // file is always ours, as long as we're authenticated
@@ -46,7 +43,7 @@ void MarcNode::fillStat(struct stat *stbuf)
     stbuf->st_blksize = 4096;
 }
 
-void MarcNode::rename(MarcRestClient *client, string oldPath, string newPath)
+void MarcNode::rename(MarcRestClient *client, std::string oldPath, std::string newPath)
 {
     // default implementation
     client->rename(oldPath, newPath);

@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>     // getuid
 #include <signal.h>     // disabling signal handlers
+#include <filesystem>   // filesystem access
 #include <pwd.h>
 
 #include <json/json.h>
@@ -74,8 +75,6 @@ static struct fuse_opt marcfsOpts[] = {
 // handling non-value options
 static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct fuse_args *outargs)
 {
-    using namespace std;
-
     switch (key) {
         case KEY_HELP:
             fprintf(stderr,
@@ -97,36 +96,35 @@ static int marcfs_opt_proc(void */*data*/, const char */*arg*/, int key, struct 
             , outargs->argv[0]);
             exit(1);
         case KEY_VERSION:
-            cerr << "MARC-FS version " << MARC_FS_VERSION << endl;
+            std::cerr << "MARC-FS version " << MARC_FS_VERSION << std::endl;
             exit(0);
     }
     return 1;
 }
 
-static void loadConfigFile(MarcfsConfig *conf) {
-    using namespace std;
-
+static void loadConfigFile(MarcfsConfig *conf) 
+{
     Json::Value config;
     Json::CharReaderBuilder reader;
 
-    ifstream configFile;
+    std::ifstream configFile;
     if (conf->conffile) {
         // config file location is set, try to load data from there
-        configFile.open(conf->conffile, ifstream::in | ifstream::binary);
+        configFile.open(conf->conffile, std::ifstream::in | std::ifstream::binary);
     } else {
         // try default location
-        string homedir = getpwuid(getuid())->pw_dir;
-        configFile.open(homedir + "/.config/marcfs/config.json", ifstream::in | ifstream::binary);
+        std::string homedir = getpwuid(getuid())->pw_dir;
+        configFile.open(homedir + "/.config/marcfs/config.json", std::ifstream::in | std::ifstream::binary);
     }
 
     if (configFile.fail())
         return; // no config file
 
-    string parseErrors;
+    std::string parseErrors;
     bool ok = parseFromStream(reader, configFile, &config, &parseErrors);
     if (!ok) {
-        cerr << "Errors parsing config file: " << parseErrors << endl;
-        cerr << "Invalid json in config file, ignoring..." << endl;
+        std::cerr << "Errors parsing config file: " << parseErrors << std::endl;
+        std::cerr << "Invalid json in config file, ignoring..." << std::endl;
         return;
     }
 
@@ -142,7 +140,7 @@ static void loadConfigFile(MarcfsConfig *conf) {
 
     if (!conf->proxyurl && config["proxyurl"] != Json::Value())
         conf->proxyurl = strdup(config["proxyurl"].asCString());
-    
+
     if (!conf->maxDownloadRate && config["max-download-rate"] != Json::Value())
         conf->maxDownloadRate = config["max-download-rate"].asInt64();
 
@@ -156,7 +154,8 @@ static void loadConfigFile(MarcfsConfig *conf) {
  * @param param - parameter, like username=alice
  * @param rest - length of parameter
  */
-static void hideSensitiveData(char *param, size_t rest) {
+static void hideSensitiveData(char *param, size_t rest)
+{
     char *data = strchr(param, '=');
     size_t len;
     if (data && (len = strlen(++data) - rest)) {
@@ -172,7 +171,8 @@ static void hideSensitiveData(char *param, size_t rest) {
  * @param argc - argument count, pass directly from main
  * @param argv - argument array, pass directly from main
  */
-static void hideSensitive(int argc, char *argv[]) {
+static void hideSensitive(int argc, char *argv[])
+{
     using namespace std;
 
     for (int i = 1; i < argc; ++i) {
@@ -189,14 +189,12 @@ static void hideSensitive(int argc, char *argv[]) {
 
 int main(int argc, char *argv[])
 {
-    using namespace std;
-
     // disable SIGPIPE that may come from openssl internals
     signal(SIGPIPE, SIG_IGN);
 
     if (argc < 2) { // didn't send anything?
-        cerr << "No command options specified, ";
-        cerr << "please try -h or --help to get comprehensive list" << endl;
+        std::cerr << "No command options specified, ";
+        std::cerr << "please try -h or --help to get comprehensive list" << std::endl;
         return 1;
     }
 
@@ -212,7 +210,7 @@ int main(int argc, char *argv[])
 
     // check config validity
     if (!conf.username || !conf.password) {
-        cerr << "Both 'username' and 'password' parameters must be specified" << endl;
+        std::cerr << "Both 'username' and 'password' parameters must be specified" << std::endl;
         return 3;
     }
 
@@ -240,11 +238,9 @@ int main(int argc, char *argv[])
 
     // initialize cache dir
     if (conf.cachedir) {
-        struct stat info = {};
-        stat(conf.cachedir, &info);
-        if (!(info.st_mode & S_IFDIR)) { // not a dir
-            cout << "cachedir option is invalid: "
-                 << conf.cachedir << " directory not found" << endl;
+        if (!std::filesystem::is_directory(conf.cachedir)) {
+            // not a dir
+            std::cout << "cachedir option is invalid: " << conf.cachedir << " directory not found" << std::endl;
             return 1;
         }
 

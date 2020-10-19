@@ -30,41 +30,40 @@
 #include "marc_rest_client.h"
 #include "abstract_storage.h"
 
-#define NV_PAIR(name, value) curl_pair<CURLformoption, string>(CURLFORM_COPYNAME, name), \
-                             curl_pair<CURLformoption, string>(CURLFORM_COPYCONTENTS, value.c_str())
+#define NV_PAIR(name, value) curl_pair<CURLformoption, std::string>(CURLFORM_COPYNAME, name), \
+                             curl_pair<CURLformoption, std::string>(CURLFORM_COPYCONTENTS, value.c_str())
 
-using namespace std;
 using namespace curl;
 
-static const string SAFE_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
+static const std::string SAFE_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
 
-static const string AUTH_DOMAIN = "https://auth.mail.ru";
-static const string CLOUD_DOMAIN = "https://cloud.mail.ru";
+static const std::string AUTH_DOMAIN = "https://auth.mail.ru";
+static const std::string CLOUD_DOMAIN = "https://cloud.mail.ru";
 
-static const string AUTH_ENDPOINT = AUTH_DOMAIN + "/cgi-bin/auth";
-static const string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
+static const std::string AUTH_ENDPOINT = AUTH_DOMAIN + "/cgi-bin/auth";
+static const std::string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
 
-static const string SCLD_SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
-static const string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
+static const std::string SCLD_SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
+static const std::string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
 
-static const string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
-static const string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
-static const string SCLD_SPACE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/user/space";
+static const std::string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
+static const std::string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
+static const std::string SCLD_SPACE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/user/space";
 
-static const string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
-static const string SCLD_PUBLISHFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/publish";
-static const string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
-static const string SCLD_RENAMEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/rename";
-static const string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
-static const string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
+static const std::string SCLD_ADDFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/add";
+static const std::string SCLD_PUBLISHFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/publish";
+static const std::string SCLD_REMOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/remove";
+static const std::string SCLD_RENAMEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/rename";
+static const std::string SCLD_MOVEFILE_ENDPOINT = SCLD_FILE_ENDPOINT + "/move";
+static const std::string SCLD_ADDFOLDER_ENDPOINT = SCLD_FOLDER_ENDPOINT + "/add";
 
-const string SCLD_PUBLICLINK_ENDPOINT = CLOUD_DOMAIN + "/public";
+const std::string SCLD_PUBLICLINK_ENDPOINT = CLOUD_DOMAIN + "/public";
 
-static string toPadded40Hex(const std::string& s) {
+static std::string toPadded40Hex(const std::string& s) {
     if (s.length() >= 40) {
         throw MailApiException("String is too long");
     }
-    
+
     // fill the stream
     std::ostringstream ret;
     for (std::string::size_type i = 0; i < s.length(); ++i)
@@ -79,7 +78,7 @@ static string toPadded40Hex(const std::string& s) {
 }
 
 MarcRestClient::MarcRestClient()
-    : restClient(make_unique<curl::curl_easy>()),
+    : restClient(std::make_unique<curl::curl_easy>()),
       cookieStore(*restClient) {
     cookieStore.set_file("");   // init cookie engine
     restClient->reset();        // reset debug->std:cout function
@@ -87,7 +86,7 @@ MarcRestClient::MarcRestClient()
 
 
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
-    : restClient(make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
+    : restClient(std::make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
       cookieStore(*restClient),                 // cokie_store is not copyable, init in body
       proxyUrl(toCopy.proxyUrl),
       maxDownloadRate(toCopy.maxDownloadRate),
@@ -100,7 +99,7 @@ MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     cookieStore.set_file("");                   // init cookie engine
 }
 
-void MarcRestClient::setProxy(string proxyUrl) {
+void MarcRestClient::setProxy(std::string proxyUrl) {
     this->proxyUrl = proxyUrl;
 }
 
@@ -112,31 +111,31 @@ void MarcRestClient::setMaxUploadRate(uint64_t rate) {
     this->maxUploadRate = rate;
 }
 
-string MarcRestClient::paramString(Params const &params) {
+std::string MarcRestClient::paramString(Params const &params) {
     if (params.empty())
         return "";
 
-    vector<string> result;
+    std::vector<std::string> result;
     result.reserve(params.size());
     for (auto it = params.cbegin(); it != params.end(); ++it) {
-        string name = it->first, value = it->second;
+        std::string name = it->first, value = it->second;
         if (name.empty())
             continue;
 
         restClient->escape(name);
         restClient->escape(value);
-        string argument = value.empty() ? name : name + "=" + value;
+        std::string argument = value.empty() ? name : name + "=" + value;
         result.push_back(argument);
     }
 
-    stringstream s;
-    copy(result.cbegin(), result.cend(), ostream_iterator<string>(s, "&"));
+    std::stringstream s;
+    copy(result.cbegin(), result.cend(), std::ostream_iterator<std::string>(s, "&"));
     return s.str();
 }
 
-string MarcRestClient::performAction() {
-    ostringstream stream;
-    curl_ios<ostringstream> writer(stream);
+std::string MarcRestClient::performAction() {
+    std::ostringstream stream;
+    curl_ios<std::ostringstream> writer(stream);
 
     curl_header header;
     header.add("Accept: */*");
@@ -147,7 +146,7 @@ string MarcRestClient::performAction() {
         restClient->add<CURLOPT_PROXY>(this->proxyUrl.data());
     if (this->maxUploadRate)
         restClient->add<CURLOPT_MAX_SEND_SPEED_LARGE>(this->maxUploadRate);
-        
+
     restClient->add<CURLOPT_CONNECTTIMEOUT>(10L);
     restClient->add<CURLOPT_TCP_KEEPALIVE>(1L);
     restClient->add<CURLOPT_FOLLOWLOCATION>(1L);
@@ -215,8 +214,8 @@ void MarcRestClient::performGet(AbstractStorage &target) {
         if (target.empty())
             throw MailApiException("Non-success return code!", ret);
 
-        string body = target.readFully();
-        throw MailApiException(string("Non-success return code! Body:") + body, ret);
+        std::string body = target.readFully();
+        throw MailApiException(std::string("Non-success return code! Body:") + body, ret);
     }
 }
 
@@ -236,9 +235,9 @@ bool MarcRestClient::login(const Account &acc) {
     return true;
 }
 
-void MarcRestClient::create(string remotePath) {
-    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
-    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
+void MarcRestClient::create(std::string remotePath) {
+    std::string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    std::string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     // add zero file, special hash
     addUploadedFile(filename, parentDir, "0000000000000000000000000000000000000000", 0);
@@ -250,8 +249,8 @@ void MarcRestClient::authenticate() {
     curl_form form;
     form.add(NV_PAIR("Login", authAccount.login));
     form.add(NV_PAIR("Password", authAccount.password));
-    form.add(NV_PAIR("Domain", string("mail.ru")));
-    form.add(NV_PAIR("new_auth_form", string("1")));
+    form.add(NV_PAIR("Domain", std::string("mail.ru")));
+    form.add(NV_PAIR("new_auth_form", std::string("1")));
 
     restClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
@@ -263,7 +262,7 @@ void MarcRestClient::authenticate() {
 
 void MarcRestClient::obtainCloudCookie() {
     curl_form form;
-    form.add(NV_PAIR("from", string(CLOUD_DOMAIN + "/home")));
+    form.add(NV_PAIR("from", std::string(CLOUD_DOMAIN + "/home")));
 
     size_t cookiesSize = cookieStore.get().size();
 
@@ -279,10 +278,10 @@ void MarcRestClient::obtainAuthToken() {
     using Json::Value;
 
     restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
-    string answer = performAction();
+    std::string answer = performAction();
 
     Value response;
-    istringstream(answer) >> response;
+    std::istringstream(answer) >> response;
 
     if (response["body"] == Value() || response["body"]["token"] == Value())
         throw MailApiException("Received json doesn't contain token string!");
@@ -293,12 +292,12 @@ void MarcRestClient::obtainAuthToken() {
 Shard MarcRestClient::obtainShard(Shard::ShardType type) {
     using Json::Value;
 
-    string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
+    std::string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
     restClient->add<CURLOPT_URL>(url.data());
-    string answer = performAction();
+    std::string answer = performAction();
 
     Value response;
-    istringstream(answer) >> response;
+    std::istringstream(answer) >> response;
 
     if (response["body"] != Value()) {
         return Shard(response["body"][Shard::asString(type)]);
@@ -307,10 +306,10 @@ Shard MarcRestClient::obtainShard(Shard::ShardType type) {
     throw MailApiException("Non-Shard json received: " + answer);
 }
 
-void MarcRestClient::addUploadedFile(string name, string remoteDir, string hash, size_t size) {
-    string postFields = paramString({
+void MarcRestClient::addUploadedFile(std::string name, std::string remoteDir, std::string hash, size_t size) {
+    std::string postFields = paramString({
         {"hash", hash},
-        {"size", to_string(size)},
+        {"size", std::to_string(size)},
         {"home", remoteDir + name},
         {"conflict", "rewrite"},  // also: rename, strict
         {"api", "2"},
@@ -322,8 +321,8 @@ void MarcRestClient::addUploadedFile(string name, string remoteDir, string hash,
     performAction();
 }
 
-void MarcRestClient::move(string whatToMove, string whereToMove) {
-    string postFields = paramString({
+void MarcRestClient::move(std::string whatToMove, std::string whereToMove) {
+    std::string postFields = paramString({
         {"api", "2"},
         {"conflict", "rewrite"},  // also: rename, strict
         {"folder", whereToMove},
@@ -336,8 +335,8 @@ void MarcRestClient::move(string whatToMove, string whereToMove) {
     performAction();
 }
 
-void MarcRestClient::remove(string remotePath) {
-    string postFields = paramString({
+void MarcRestClient::remove(std::string remotePath) {
+    std::string postFields = paramString({
         {"api", "2"},
         {"home", remotePath},
         {"token", authToken}
@@ -351,17 +350,17 @@ void MarcRestClient::remove(string remotePath) {
 SpaceInfo MarcRestClient::df() {
     using Json::Value;
 
-    string getFields = paramString({
+    std::string getFields = paramString({
         {"api", "2"},
         {"token", authToken},
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
-    string answer = performAction();
+    std::string answer = performAction();
 
     SpaceInfo result;
     Value response;
-    istringstream(answer) >> response;
+    std::istringstream(answer) >> response;
 
     // if `total` is there, `used` will definitely be...
     if (response["body"] == Value() || response["body"]["bytes_total"] == Value())
@@ -375,14 +374,14 @@ SpaceInfo MarcRestClient::df() {
     return result;
 }
 
-void MarcRestClient::rename(string oldRemotePath, string newRemotePath) {
-    string oldFilename = oldRemotePath.substr(oldRemotePath.find_last_of("/\\") + 1);
-    string oldParentDir = oldRemotePath.substr(0, oldRemotePath.find_last_of("/\\") + 1);
+void MarcRestClient::rename(std::string oldRemotePath, std::string newRemotePath) {
+    std::string oldFilename = oldRemotePath.substr(oldRemotePath.find_last_of("/\\") + 1);
+    std::string oldParentDir = oldRemotePath.substr(0, oldRemotePath.find_last_of("/\\") + 1);
 
-    string newFilename = newRemotePath.substr(newRemotePath.find_last_of("/\\") + 1);
-    string newParentDir = newRemotePath.substr(0, newRemotePath.find_last_of("/\\") + 1);
+    std::string newFilename = newRemotePath.substr(newRemotePath.find_last_of("/\\") + 1);
+    std::string newParentDir = newRemotePath.substr(0, newRemotePath.find_last_of("/\\") + 1);
 
-    string postFields = paramString({
+    std::string postFields = paramString({
         {"api", "2"},
         {"conflict", "rewrite"}, // also: rename, strict
         {"home", oldRemotePath},
@@ -402,10 +401,10 @@ void MarcRestClient::rename(string oldRemotePath, string newRemotePath) {
     }
 }
 
-string MarcRestClient::share(string remotePath) {
+std::string MarcRestClient::share(std::string remotePath) {
     using Json::Value;
 
-    string postFields = paramString({
+    std::string postFields = paramString({
         {"api", "2"},
         {"home", remotePath},
         {"token", authToken},
@@ -413,10 +412,10 @@ string MarcRestClient::share(string remotePath) {
 
     restClient->add<CURLOPT_URL>(SCLD_PUBLISHFILE_ENDPOINT.data());
     restClient->add<CURLOPT_POSTFIELDS>(postFields.data());
-    string answer = performAction();
+    std::string answer = performAction();
 
     Value response;
-    istringstream(answer) >> response;
+    std::istringstream(answer) >> response;
 
     if (response["body"] == Value())
         throw MailApiException("Non-well formed JSON share response!");
@@ -430,30 +429,30 @@ struct ReadData {
     off_t count;   // maximum offset - can be lower than content.size()
 };
 
-void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t start, off_t count) {
+void MarcRestClient::upload(std::string remotePath, AbstractStorage &body, off_t start, off_t count) {
     if (body.empty()) {
         // zero size upload requested, skip upload part completely
         create(remotePath);
         return;
     }
 
-    string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
-    string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
+    std::string filename = remotePath.substr(remotePath.find_last_of("/\\") + 1);
+    std::string parentDir = remotePath.substr(0, remotePath.find_last_of("/\\") + 1);
 
     if (body.size() <= 20) {
         // Mail.ru Cloud has special handling for files that are no more than 20 bytes in size
-        string content = body.readFully();
+        std::string content = body.readFully();
         addUploadedFile(filename, parentDir, toPadded40Hex(content), body.size());
         return;
     }
 
     Shard s = obtainShard(Shard::ShardType::UPLOAD);
-    string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
+    std::string uploadUrl = s.getUrl() + "?" + paramString({{"cloud_domain", "2"}, {"x-email", authAccount.login}});
 
     // fileupload part
     curl_form nameForm;
-    off_t realSize = min(static_cast<off_t>(body.size()) - start, count);  // size to transfer
-    ReadData ptr {&body, start, min(static_cast<off_t>(body.size()), start + count)};
+    off_t realSize = std::min(static_cast<off_t>(body.size()) - start, count);  // size to transfer
+    ReadData ptr {&body, start, std::min(static_cast<off_t>(body.size()), start + count)};
 
     restClient->add<CURLOPT_URL>(uploadUrl.data());
     restClient->add<CURLOPT_UPLOAD>(1L);
@@ -464,18 +463,18 @@ void MarcRestClient::upload(string remotePath, AbstractStorage &body, off_t star
         auto target = static_cast<char *>(contents);
         const size_t requested = size * nmemb;
         const size_t available = source->count - source->offset;
-        const size_t transferred = min(requested, available);
+        const size_t transferred = std::min(requested, available);
         source->content->read(target, transferred, source->offset);
         source->offset += transferred;
         return transferred;
     });
-    string answer = performAction();
+    std::string answer = performAction();
 
     addUploadedFile(filename, parentDir, answer, realSize);
 }
 
-void MarcRestClient::mkdir(string remotePath) {
-    string postFields = paramString({
+void MarcRestClient::mkdir(std::string remotePath) {
+    std::string postFields = paramString({
         {"api", "2"},
         {"conflict", "rewrite"},  // also: rename, strict
         {"home", remotePath},
@@ -487,10 +486,10 @@ void MarcRestClient::mkdir(string remotePath) {
     performAction();
 }
 
-vector<CloudFile> MarcRestClient::ls(string remotePath) {
+std::vector<CloudFile> MarcRestClient::ls(std::string remotePath) {
     using Json::Value;
 
-    string getFields = paramString({
+    std::string getFields = paramString({
         {"api", "2"},
         {"limit", "100500" }, // 100500 files in folder - who'd dare for more?
         {"token", authToken},
@@ -498,11 +497,11 @@ vector<CloudFile> MarcRestClient::ls(string remotePath) {
     });
 
     restClient->add<CURLOPT_URL>((SCLD_FOLDER_ENDPOINT + "?" + getFields).data());
-    string answer = performAction();
+    std::string answer = performAction();
 
-    vector<CloudFile> results;
+    std::vector<CloudFile> results;
     Value response;
-    istringstream(answer) >> response;
+    std::istringstream(answer) >> response;
 
     if (response["body"] == Value() || response["body"]["list"] == Value())
         throw MailApiException("Non-well formed JSON ls response!");
@@ -515,7 +514,7 @@ vector<CloudFile> MarcRestClient::ls(string remotePath) {
     return results;
 }
 
-void MarcRestClient::download(string remotePath, AbstractStorage &target) {
+void MarcRestClient::download(std::string remotePath, AbstractStorage &target) {
     Shard s = obtainShard(Shard::ShardType::GET);
     restClient->escape(remotePath);
     restClient->add<CURLOPT_URL>((s.getUrl() + remotePath).data());

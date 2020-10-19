@@ -23,8 +23,6 @@
 #include <algorithm>
 #include <string>
 
-using namespace std;
-
 MemoryStorage::MemoryStorage() {
 }
 
@@ -47,12 +45,12 @@ int MemoryStorage::read(char *buf, size_t size, uint64_t offset) {
 
     if (offset + size > len) {
         // requested size is more than we have
-        copy_n(&data[offset], len - offset, buf);
+        std::copy_n(&data[offset], len - offset, buf);
         return static_cast<int>(len - offset);
     }
 
     // normal operation
-    copy_n(&data[offset], size, buf);
+    std::copy_n(&data[offset], size, buf);
     return static_cast<int>(size);
 }
 
@@ -61,17 +59,17 @@ int MemoryStorage::write(const char *buf, size_t size, uint64_t offset) {
         data.resize(offset + size);
     }
 
-    copy_n(buf, size, &data[offset]);
+    std::copy_n(buf, size, &data[offset]);
     return static_cast<int>(size);
 }
 
 void MemoryStorage::append(const char *buf, size_t size) {
-    vector<char> tail(buf, buf + size);
+    std::vector<char> tail(buf, buf + size);
     data.insert(data.end(), tail.begin(), tail.end());
 }
 
-string MemoryStorage::readFully() {
-    return string(&data.front(), data.size());
+std::string MemoryStorage::readFully() {
+    return std::string(&data.front(), data.size());
 }
 
 void MemoryStorage::clear() {

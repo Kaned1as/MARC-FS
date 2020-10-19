@@ -28,8 +28,6 @@
 
 extern std::string cacheDir;
 
-using namespace std;
-
 MarcFileNode::MarcFileNode() {
     if (cacheDir.empty()) {
         cachedContent.reset(new MemoryStorage);
@@ -54,9 +52,9 @@ void MarcFileNode::fillStat(struct stat *stbuf) {
     stbuf->st_blocks = getSize() / 512 + 1;
 }
 
-void MarcFileNode::open(MarcRestClient *client, string path) {
+void MarcFileNode::open(MarcRestClient *client, std::string path) {
     // open is potentially network-download operation, lock it
-    unique_lock<mutex> guard(netMutex);
+    std::unique_lock<std::mutex> guard(netMutex);
 
     if (opened) {
         // shouldn't happen
@@ -72,7 +70,7 @@ void MarcFileNode::open(MarcRestClient *client, string path) {
         // compound file
         off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;     // let's say, file is 3GB, that gives us 2 parts
         for (off_t idx = 0; idx < partCount; ++idx) {
-            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            std::string extendedPathname = std::string(path) + MARCFS_SUFFIX + std::to_string(idx);
             client->download(extendedPathname, *cachedContent); // append part to current cache
         }
     } else {
@@ -82,9 +80,9 @@ void MarcFileNode::open(MarcRestClient *client, string path) {
 }
 
 
-void MarcFileNode::flush(MarcRestClient *client, string path) {
+void MarcFileNode::flush(MarcRestClient *client, std::string path) {
     // open is potentially network-upload operation, lock it
-    unique_lock<mutex> guard(netMutex);
+    std::unique_lock<std::mutex> guard(netMutex);
 
     // skip unchanged files
     if (!dirty)
@@ -95,7 +93,7 @@ void MarcFileNode::flush(MarcRestClient *client, string path) {
         // old one was compound file - delete old parts
         off_t oldPartCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
         for (off_t idx = 0; idx < oldPartCount; ++idx) {
-            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            std::string extendedPathname = std::string(path) + MARCFS_SUFFIX + std::to_string(idx);
             client->remove(extendedPathname);
         }
     } else {
@@ -108,7 +106,7 @@ void MarcFileNode::flush(MarcRestClient *client, string path) {
         off_t partCount = (cachedContent->size() / MARCFS_MAX_FILE_SIZE) + 1;
         off_t offset = 0;
         for (off_t idx = 0; idx < partCount; ++idx) {
-            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            std::string extendedPathname = std::string(path) + MARCFS_SUFFIX + std::to_string(idx);
             client->upload(extendedPathname, *cachedContent, offset, MARCFS_MAX_FILE_SIZE);
             offset += MARCFS_MAX_FILE_SIZE;
         }
@@ -135,12 +133,12 @@ int MarcFileNode::write(const char *buf, size_t size, uint64_t offsetBytes) {
     return res;
 }
 
-void MarcFileNode::remove(MarcRestClient *client, string path) {
+void MarcFileNode::remove(MarcRestClient *client, std::string path) {
     if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, remove each part
         off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
         for (off_t idx = 0; idx < partCount; ++idx) {
-            string extendedPathname = string(path) + MARCFS_SUFFIX + to_string(idx);
+            std::string extendedPathname = std::string(path) + MARCFS_SUFFIX + std::to_string(idx);
             client->remove(extendedPathname); // append part to current cache
         }
     } else {
@@ -149,13 +147,13 @@ void MarcFileNode::remove(MarcRestClient *client, string path) {
     }
 }
 
-void MarcFileNode::rename(MarcRestClient *client, string oldPath, string newPath) {
+void MarcFileNode::rename(MarcRestClient *client, std::string oldPath, std::string newPath) {
     if (oldFileSize > MARCFS_MAX_FILE_SIZE) {
         // compound file, move each part
         off_t partCount = (oldFileSize / MARCFS_MAX_FILE_SIZE) + 1;
         for (off_t idx = 0; idx < partCount; ++idx) {
-            string oldExtPathname = string(oldPath) + MARCFS_SUFFIX + to_string(idx);
-            string newExtPathname = string(newPath) + MARCFS_SUFFIX + to_string(idx);
+            std::string oldExtPathname = std::string(oldPath) + MARCFS_SUFFIX + std::to_string(idx);
+            std::string newExtPathname = std::string(newPath) + MARCFS_SUFFIX + std::to_string(idx);
             client->rename(oldExtPathname, newExtPathname);
         }
     } else {
@@ -173,7 +171,7 @@ void MarcFileNode::truncate(off_t size) {
 
 void MarcFileNode::release() {
     // this is called after all threads released the file
-    unique_lock<mutex> guard(netMutex);
+    std::unique_lock<std::mutex> guard(netMutex);
     oldFileSize = cachedContent->size(); // set cached size to last content size before clearing
     cachedContent->clear(); // forget contents of a node
     opened = false;

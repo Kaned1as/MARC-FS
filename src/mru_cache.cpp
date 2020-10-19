@@ -25,11 +25,9 @@
 #include "marc_file_node.h"
 #include "marc_dir_node.h"
 
-using namespace std;
-
 std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
     SharedLock guard(cacheLock);
-    
+
     auto cached = statCache.find(path);
     if (cached == statCache.end()) {
         return std::shared_ptr<CacheNode>();
@@ -50,13 +48,13 @@ std::shared_ptr<CacheNode> CacheManager::get(const std::string &path) {
 
 void CacheManager::put(const std::string &path, const CacheNode &node) {
     UniqueLock guard(cacheLock);
-    
+
     statCache[path] = std::make_shared<CacheNode>(node);
 }
 
 void CacheManager::remove(const std::string &path) {
     UniqueLock guard(cacheLock);
-    
+
     statCache.erase(path);
 }
 
