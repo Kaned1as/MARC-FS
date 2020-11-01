@@ -22,15 +22,22 @@
 #include "../src/marc_rest_client.h"
 #include "../src/memory_storage.h"
 
-using namespace std;
 
 MarcRestClient* setUpMrc() {
     static MarcRestClient* mrc = nullptr;
     if (!mrc) {
+        std::string login = std::getenv("MARCFS_TEST_USERNAME");
+        std::string password = std::getenv("MARCFS_TEST_PASSWORD");
+
+        std::cout << "Logging in:" << std::endl;
+        std::cout << "Login: " << login << std::endl;
+        std::cout << "Password: " << password << std::endl;
+        std::cout << std::endl << std::endl;
+
         mrc = new MarcRestClient;
         Account fake;
-        fake.setLogin("kanedias.the.maker@mail.ru");
-        fake.setPassword("thecakeisalie");
+        fake.setLogin(login);
+        fake.setPassword(password);
         mrc->login(fake);
     }
     return mrc;
@@ -45,7 +52,7 @@ TEST(ApiIntegrationTesting, TestListDir) {
     auto mrc = setUpMrc();
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](string arg) {
+    auto findFileInVec = [&](std::string arg) {
         return find_if(fVec.cbegin(), fVec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -54,25 +61,9 @@ TEST(ApiIntegrationTesting, TestListDir) {
     EXPECT_NE(findFileInVec("Долина реки.jpg"), fVec.cend());
     EXPECT_NE(findFileInVec("На отдыхе.jpg"), fVec.cend());
     EXPECT_NE(findFileInVec("Полет.mp4"), fVec.cend());
-    EXPECT_NE(findFileInVec("Mail.Ru рекомендует"), fVec.cend());
 
     EXPECT_TRUE(findFileInVec("Полёт") == fVec.cend());
     EXPECT_TRUE(findFileInVec("Берег.") == fVec.cend());
-    EXPECT_TRUE(findFileInVec("NonExistingFile.jpg") == fVec.cend());
-}
-
-TEST(ApiIntegrationTesting, TestListNestedDir) {
-    auto mrc = setUpMrc();
-    auto fVec = mrc->ls("/Mail.Ru рекомендует");
-
-    auto findFileInVec = [&](string arg) {
-        return find_if(fVec.cbegin(), fVec.cend(), [&arg](auto &f) { return f.getName() == arg; });
-    };
-
-    EXPECT_NE(findFileInVec("Screenshoter.exe"), fVec.cend());
-
-    EXPECT_TRUE(findFileInVec("Screenshoter") == fVec.cend());
-    EXPECT_TRUE(findFileInVec("Screenshoter.ex") == fVec.cend());
     EXPECT_TRUE(findFileInVec("NonExistingFile.jpg") == fVec.cend());
 }
 
@@ -80,8 +71,8 @@ TEST(ApiIntegrationTesting, TestShowUsage) {
     auto mrc = setUpMrc();
     auto stats = mrc->df();
 
-    EXPECT_EQ(stats.total, 16L * 1024 * 1024 * 1024); // Mail.Ru default storage size - 16 GiB
-    EXPECT_EQ(stats.used, 515340199); // Mail.Ru default content weight
+    EXPECT_EQ(stats.total, 8L * 1024 * 1024 * 1024); // Mail.Ru default storage size - 8 GiB
+    EXPECT_EQ(stats.used, 492119223); // Mail.Ru default content weight
 }
 
 TEST(ApiIntegrationTesting, TestCreateFile) {
@@ -90,7 +81,7 @@ TEST(ApiIntegrationTesting, TestCreateFile) {
     mrc->upload("/cheshire.cat", dummy);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -113,7 +104,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyTinyFile) {
     mrc->upload("/tiny_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -140,7 +131,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyAlmost20File) {
     mrc->upload("/small_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -167,7 +158,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyExactly20File) {
     mrc->upload("/20_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -194,7 +185,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyExactly21File) {
     mrc->upload("/21_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -221,7 +212,7 @@ TEST(ApiIntegrationTesting, TestCreateNonEmptyBigFile) {
     mrc->upload("/medium_file.txt", vpar);
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -245,7 +236,7 @@ TEST(ApiIntegrationTesting, TestCreateDir) {
     mrc->mkdir("/testDir");
     auto fVec = mrc->ls("/");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -265,7 +256,7 @@ TEST(ApiIntegrationTesting, TestCreateNestedDir) {
     mrc->mkdir("/Mail.Ru рекомендует/testDir");
     auto fVec = mrc->ls("/Mail.Ru рекомендует");
 
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -288,7 +279,7 @@ TEST(ApiIntegrationTesting, TestMoveFile) {
     mrc->rename("/dummyToMove.txt", "/movedDummy.txt");
 
     auto fVec = mrc->ls("/");
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 
@@ -309,7 +300,7 @@ TEST(ApiIntegrationTesting, TestMoveFileIntoNestedDir) {
     mrc->rename("/dummyToMove.txt", "/Mail.Ru рекомендует/movedDummy.txt");
 
     auto fVec = mrc->ls("//Mail.Ru рекомендует");
-    auto findFileInVec = [&](const auto &vec, string arg) {
+    auto findFileInVec = [&](const auto &vec, std::string arg) {
         return find_if(vec.cbegin(), vec.cend(), [&arg](auto &f) { return f.getName() == arg; });
     };
 

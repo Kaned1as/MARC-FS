@@ -26,12 +26,16 @@ stages:
   - userdel fstest
 
 .fstest_script: &common_fstest_script
-  - su -c 'python3 fstest.py -v' - fstest
+  - su --whitelist-environment=MARCFS_TEST_USERNAME,MARCFS_TEST_PASSWORD -c 'python3 fstest.py -v' - fstest
 
 build on ubuntu:
-  image: ubuntu:19.04
+  image: ubuntu:20.04
   stage: build
   needs: []
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+    MARCFS_TEST_USERNAME: $MARCFS_UBUNTU_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_UBUNTU_TEST_PASSWORD
   before_script: &common_compile_debian
     - apt-get update -qq
     - apt-get install -y -qq software-properties-common cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev
@@ -39,9 +43,11 @@ build on ubuntu:
   artifacts: *binary_artifact
 
 deb package for ubuntu:
-  image: ubuntu:19.04
+  image: ubuntu:20.04
   stage: build
   needs: []
+  variables:
+    DEBIAN_FRONTEND: noninteractive
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq software-properties-common git cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make fuse3
@@ -61,11 +67,12 @@ deb package for ubuntu:
       - "*.deb"
 
 fstest on ubuntu:
-  image: ubuntu:19.04
+  image: ubuntu:20.04
   stage: fstest
   needs:
     - build on ubuntu
   variables:
+    DEBIAN_FRONTEND: noninteractive
     MARCFS_TEST_USERNAME: $MARCFS_UBUNTU_TEST_USERNAME
     MARCFS_TEST_PASSWORD: $MARCFS_UBUNTU_TEST_PASSWORD
   before_script: &common_test_debian
@@ -81,6 +88,9 @@ static binary universal build:
   image: alpine
   stage: build
   needs: []
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_UNIVERSAL_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_UNIVERSAL_TEST_PASSWORD
   before_script:
     - apk add g++ meson curl git pkgconf ninja make cmake perl linux-headers
       # jsoncpp
@@ -145,6 +155,9 @@ build on fedora:
   image: fedora
   stage: build
   needs: []
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_FEDORA_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_FEDORA_TEST_PASSWORD
   before_script:
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel
   script: *common_script
@@ -172,6 +185,9 @@ fstest on fedora:
   stage: fstest
   needs:
     - build on fedora
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_FEDORA_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_FEDORA_TEST_PASSWORD
   before_script:
     - yum -y install fuse fuse-libs fuse3 fuse3-libs libcurl jsoncpp python
     - useradd --create-home fstest
@@ -179,7 +195,8 @@ fstest on fedora:
     - "chown -R fstest: ~fstest"
   after_script: *common_fstest_after
   script:
-    - su -c 'export NSS_STRICT_NOFORK=DISABLED; python3 fstest.py -v' - fstest
+    - export NSS_STRICT_NOFORK=DISABLED
+    - su --whitelist-environment=MARCFS_TEST_USERNAME,MARCFS_TEST_PASSWORD,NSS_STRICT_NOFORK -c 'python3 fstest.py -v' - fstest
 
 
 build on arch:
@@ -187,6 +204,9 @@ build on arch:
   image: archlinux/base
   stage: build
   needs: []
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_ARCH_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_ARCH_TEST_PASSWORD
   before_script:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp
@@ -199,21 +219,24 @@ aur package for arch:
   needs: []
   before_script:
     - pacman -Syu --noconfirm
-    - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp fakeroot
+    - pacman -S --noconfirm awk git make cmake gcc fuse3 libcurl-gnutls jsoncpp fakeroot
     - useradd --create-home build
     - cp distribution/archlinux/PKGBUILD ~build
   script:
     - su -c 'makepkg -s' - build
-    - cp -v ~build/*.tar.xz .
+    - cp -v ~build/*.tar.zst .
   artifacts:
     paths:
-      - "*.tar.xz"
+      - "*.tar.zst"
 
 fstest on arch:
   image: archlinux/base
   stage: fstest
   needs:
     - build on arch
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_ARCH_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_ARCH_TEST_PASSWORD
   before_script:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm fuse3 fuse2 libcurl-gnutls jsoncpp python

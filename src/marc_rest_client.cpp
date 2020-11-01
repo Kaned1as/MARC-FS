@@ -37,7 +37,7 @@
 
 using namespace curl;
 
-static const std::string SAFE_USER_AGENT = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm";
+static const std::string SAFE_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; rv:78.0) Gecko/20100101 Firefox/78.0";
 
 static const std::string MAIN_DOMAIN = "https://mail.ru";
 static const std::string AUTH_DOMAIN = "https://auth.mail.ru";
@@ -296,6 +296,8 @@ void MarcRestClient::create(std::string remotePath) {
 }
 
 void MarcRestClient::authenticate() {
+    size_t cookiesSize = cookieStore.get().size();
+
     curl_form form;
     form.add(NV_PAIR("login", authAccount.login));
     form.add(NV_PAIR("password", authAccount.password));
@@ -313,8 +315,8 @@ void MarcRestClient::authenticate() {
 
     performAction(&force_main_domain);
 
-    if (cookieStore.get().empty())  // no cookies received, halt
-        throw MailApiException("Failed to authenticate " + authAccount.login + " in mail.ru domain!");
+    if (cookieStore.get().size() <= cookiesSize)  // no cookies received, halt
+        throw MailApiException("Failed to authenticate with " + authAccount.login + " credentials");
 }
 
 Shard MarcRestClient::obtainShard(Shard::ShardType type) {

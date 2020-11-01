@@ -26,11 +26,11 @@ MARC-FS - Mail.ru Cloud filesystem written for FUSE.
 
 %build
 %cmake -DBUILD_SHARED_LIBS:BOOL=OFF
-make %{?_smp_mflags}
+%cmake_build
 
 
 %install
-%make_install
+%cmake_install
 
 
 %files
@@ -39,6 +39,9 @@ make %{?_smp_mflags}
 
 
 %changelog
+* Sun Nov 01 2020 Oleg Chernovskiy <kanedias@xaker.ru> - 0.6.0gitc5a7985
+- Fix cloud API
+
 * Wed Sep 19 2018 Oleg Chernovskiy <kanedias@xaker.ru> - 0.6.0git801e616
 - Update to fuse3
 
