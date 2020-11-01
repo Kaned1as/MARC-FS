@@ -207,10 +207,14 @@ public:
     void authenticate();
 
     /**
-     * @brief API::obtainCloudCookie - retrieves basic cloud cookie that is needed for API exchange
-     * @throws MailApiException in case of failure
+     * @brief API::openMainPage - retrieves main page and all associated cookies
      */
-    void obtainCloudCookie();
+    void openMainPage();
+
+    /**
+     * @brief API::openCloudPage - retrieves cloud page and associated CSRF token
+     */
+    void openCloudPage();
 
     /**
      * @brief API::obtainAuthToken - retrieve auth token.
@@ -224,7 +228,7 @@ public:
 
     // cURL helpers
     std::string paramString(Params const &params);
-    std::string performAction();
+    std::string performAction(curl::curl_header *forced_headers = nullptr);
     void performGet(AbstractStorage &target);
 
     std::unique_ptr<curl::curl_easy> restClient;
@@ -235,9 +239,10 @@ public:
     uint64_t maxDownloadRate = 0;
 
     Account authAccount;
-    std::string authToken;
+    std::string actToken;
+    std::string csrfToken;
 
-    int64_t verbose = 1;
+    int64_t verbose = 0;
 };
 
 #endif // API_H

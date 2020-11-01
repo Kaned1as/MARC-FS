@@ -18,12 +18,14 @@
  * along with MARC-FS.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <ctime>
 #include <json/json.h>
 
 #include <iterator>
 #include <iomanip>
 #include <memory>
 #include <algorithm>
+#include <string>
 
 #include "curl_header.h"
 
@@ -35,16 +37,16 @@
 
 using namespace curl;
 
-static const std::string SAFE_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:65.0) Gecko/20100101 Firefox/65.0";
+static const std::string SAFE_USER_AGENT = "CloudDiskOWindows 17.12.0009 beta WzBbt1Ygbm";
 
+static const std::string MAIN_DOMAIN = "https://mail.ru";
 static const std::string AUTH_DOMAIN = "https://auth.mail.ru";
 static const std::string CLOUD_DOMAIN = "https://cloud.mail.ru";
 
-static const std::string AUTH_ENDPOINT = AUTH_DOMAIN + "/cgi-bin/auth";
+static const std::string AUTH_ENDPOINT = AUTH_DOMAIN + "/jsapi/auth";
 static const std::string SCLD_COOKIE_ENDPOINT = AUTH_DOMAIN + "/sdc";
 
 static const std::string SCLD_SHARD_ENDPOINT = CLOUD_DOMAIN + "/api/v2/dispatcher";
-static const std::string SCLD_TOKEN_ENDPOINT = CLOUD_DOMAIN + "/api/v2/tokens/csrf";
 
 static const std::string SCLD_FOLDER_ENDPOINT = CLOUD_DOMAIN + "/api/v2/folder";
 static const std::string SCLD_FILE_ENDPOINT = CLOUD_DOMAIN + "/api/v2/file";
@@ -91,8 +93,9 @@ MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
       proxyUrl(toCopy.proxyUrl),
       maxDownloadRate(toCopy.maxDownloadRate),
       maxUploadRate(toCopy.maxUploadRate),
-      authAccount(toCopy.authAccount),          // copy account from other one
-      authToken(toCopy.authToken) {             // copy auth token from other one
+      authAccount(toCopy.authAccount),                      // copy account from other one
+      csrfToken(toCopy.csrfToken),
+      actToken(toCopy.actToken) {               // copy auth token from other one
     for (const auto &c : toCopy.cookieStore.get()) {
         restClient->add<CURLOPT_COOKIELIST>(c.data());
     }
@@ -133,13 +136,24 @@ std::string MarcRestClient::paramString(Params const &params) {
     return s.str();
 }
 
-std::string MarcRestClient::performAction() {
+std::string MarcRestClient::performAction(curl::curl_header *forced_headers) {
     std::ostringstream stream;
     curl_ios<std::ostringstream> writer(stream);
 
     curl_header header;
-    header.add("Accept: */*");
-    header.add("Origin: " + CLOUD_DOMAIN);
+    if (forced_headers) {
+        // we have forced headers, override defaults with them
+        header = *forced_headers;
+    } else {
+        // no forced headers, populate with defaults
+        header.add("Accept: */*");
+        header.add("Origin: " + CLOUD_DOMAIN);
+        header.add("Referer: " + CLOUD_DOMAIN);
+
+        if (!csrfToken.empty()) {
+            header.add("X-CSRF-Token: " + csrfToken);
+        }
+    }
 
     ScopeGuard resetter = [&] { restClient->reset(); };
     if (!this->proxyUrl.empty())
@@ -228,11 +242,49 @@ bool MarcRestClient::login(const Account &acc) {
 
     authAccount = acc;
 
+    openMainPage();
     authenticate();
-    obtainCloudCookie();
-    obtainAuthToken();
+    openCloudPage();
 
     return true;
+}
+
+void MarcRestClient::openMainPage() {
+    size_t cookiesSize = cookieStore.get().size();
+
+    restClient->add<CURLOPT_URL>(MAIN_DOMAIN.data());
+    performAction();
+
+    auto savedCookies = cookieStore.get();
+    if (savedCookies.size() <= cookiesSize)  // no more cookies received, halt
+        throw MailApiException("Failed to retrieve cookies from main mail.ru page");
+
+    auto tokenItr = std::find_if(savedCookies.begin(), savedCookies.end(), [](std::string &arg) { return arg.find("act") != std::string::npos; });
+    if (tokenItr == savedCookies.end())
+        throw MailApiException("No token cookie retrieved from main mail.ru page");
+
+    // extract act token
+    size_t tokenStart = tokenItr->find_last_of('\t');
+    actToken = tokenItr->substr(tokenStart + 1, tokenItr->size() - tokenStart);
+}
+
+void MarcRestClient::openCloudPage() {
+    size_t cookiesSize = cookieStore.get().size();
+
+    restClient->add<CURLOPT_URL>(CLOUD_DOMAIN.data());
+    std::string html = performAction();
+
+    if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
+        throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
+
+    size_t csrfTagStartPos = html.find("\"csrf\": \"");
+    if (csrfTagStartPos == std::string::npos) {
+        throw MailApiException("Couldn't find CSRF token in cloud page");
+    }
+
+    size_t csrfQuoteStartPos = csrfTagStartPos + 9;
+    size_t csrfQuoteEndPos = html.find("\"", csrfQuoteStartPos);
+    csrfToken = html.substr(csrfQuoteStartPos, csrfQuoteEndPos - csrfQuoteStartPos);
 }
 
 void MarcRestClient::create(std::string remotePath) {
@@ -244,56 +296,31 @@ void MarcRestClient::create(std::string remotePath) {
 }
 
 void MarcRestClient::authenticate() {
-    // Login={0}&Domain={1}&Password={2}
-
     curl_form form;
-    form.add(NV_PAIR("Login", authAccount.login));
-    form.add(NV_PAIR("Password", authAccount.password));
-    form.add(NV_PAIR("Domain", std::string("mail.ru")));
-    form.add(NV_PAIR("new_auth_form", std::string("1")));
+    form.add(NV_PAIR("login", authAccount.login));
+    form.add(NV_PAIR("password", authAccount.password));
+    form.add(NV_PAIR("project", std::string("e.mail.ru")));
+    form.add(NV_PAIR("saveauth", std::string("1")));
+    form.add(NV_PAIR("token", actToken));
 
     restClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
-    performAction();
+
+    curl_header force_main_domain;
+    force_main_domain.add("Accept: */*");
+    force_main_domain.add("Origin: " + MAIN_DOMAIN);
+    force_main_domain.add("Referer: " + MAIN_DOMAIN);
+
+    performAction(&force_main_domain);
 
     if (cookieStore.get().empty())  // no cookies received, halt
         throw MailApiException("Failed to authenticate " + authAccount.login + " in mail.ru domain!");
 }
 
-void MarcRestClient::obtainCloudCookie() {
-    curl_form form;
-    form.add(NV_PAIR("from", std::string(CLOUD_DOMAIN + "/home")));
-
-    size_t cookiesSize = cookieStore.get().size();
-
-    restClient->add<CURLOPT_URL>(SCLD_COOKIE_ENDPOINT.data());
-    restClient->add<CURLOPT_HTTPPOST>(form.get());
-    performAction();
-
-    if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
-        throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
-}
-
-void MarcRestClient::obtainAuthToken() {
-    using Json::Value;
-
-    restClient->add<CURLOPT_URL>(SCLD_TOKEN_ENDPOINT.c_str());
-    std::string answer = performAction();
-
-    Value response;
-    std::istringstream(answer) >> response;
-
-    if (response["body"] == Value() || response["body"]["token"] == Value())
-        throw MailApiException("Received json doesn't contain token string!");
-
-    authToken = response["body"]["token"].asString();
-}
-
 Shard MarcRestClient::obtainShard(Shard::ShardType type) {
     using Json::Value;
 
-    std::string url = SCLD_SHARD_ENDPOINT + "?" + paramString({{"token", authToken}});
-    restClient->add<CURLOPT_URL>(url.data());
+    restClient->add<CURLOPT_URL>(SCLD_SHARD_ENDPOINT.data());
     std::string answer = performAction();
 
     Value response;
@@ -312,8 +339,7 @@ void MarcRestClient::addUploadedFile(std::string name, std::string remoteDir, st
         {"size", std::to_string(size)},
         {"home", remoteDir + name},
         {"conflict", "rewrite"},  // also: rename, strict
-        {"api", "2"},
-        {"token", authToken}
+        {"api", "2"}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFILE_ENDPOINT.data());
@@ -326,8 +352,7 @@ void MarcRestClient::move(std::string whatToMove, std::string whereToMove) {
         {"api", "2"},
         {"conflict", "rewrite"},  // also: rename, strict
         {"folder", whereToMove},
-        {"home", whatToMove},
-        {"token", authToken}
+        {"home", whatToMove}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_MOVEFILE_ENDPOINT.data());
@@ -338,8 +363,7 @@ void MarcRestClient::move(std::string whatToMove, std::string whereToMove) {
 void MarcRestClient::remove(std::string remotePath) {
     std::string postFields = paramString({
         {"api", "2"},
-        {"home", remotePath},
-        {"token", authToken}
+        {"home", remotePath}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_REMOVEFILE_ENDPOINT.data());
@@ -351,8 +375,7 @@ SpaceInfo MarcRestClient::df() {
     using Json::Value;
 
     std::string getFields = paramString({
-        {"api", "2"},
-        {"token", authToken},
+        {"api", "2"}
     });
 
     restClient->add<CURLOPT_URL>((SCLD_SPACE_ENDPOINT + "?" + getFields).data());
@@ -385,8 +408,7 @@ void MarcRestClient::rename(std::string oldRemotePath, std::string newRemotePath
         {"api", "2"},
         {"conflict", "rewrite"}, // also: rename, strict
         {"home", oldRemotePath},
-        {"name", newFilename},
-        {"token", authToken}
+        {"name", newFilename}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_RENAMEFILE_ENDPOINT.data());
@@ -406,8 +428,7 @@ std::string MarcRestClient::share(std::string remotePath) {
 
     std::string postFields = paramString({
         {"api", "2"},
-        {"home", remotePath},
-        {"token", authToken},
+        {"home", remotePath}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_PUBLISHFILE_ENDPOINT.data());
@@ -477,8 +498,7 @@ void MarcRestClient::mkdir(std::string remotePath) {
     std::string postFields = paramString({
         {"api", "2"},
         {"conflict", "rewrite"},  // also: rename, strict
-        {"home", remotePath},
-        {"token", authToken}
+        {"home", remotePath}
     });
 
     restClient->add<CURLOPT_URL>(SCLD_ADDFOLDER_ENDPOINT.data());
@@ -491,8 +511,8 @@ std::vector<CloudFile> MarcRestClient::ls(std::string remotePath) {
 
     std::string getFields = paramString({
         {"api", "2"},
+        {"offset", "0" }, // 100500 files in folder - who'd dare for more?
         {"limit", "100500" }, // 100500 files in folder - who'd dare for more?
-        {"token", authToken},
         {"home", remotePath}
     });
 
