@@ -1,43 +1,16 @@
 {
     "version": "0.2.0",
     "configurations": [
-        { 
-            "name": "(gdb) Attach",
-            "type": "cppdbg",
-            "request": "attach",
-            "program": "${workspaceFolder}/build/marcfs",
-            "processId": "${command:pickProcess}",
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
         {
-            "name": "Debug",
-            "type": "cppdbg",
+            "name": "Debug mount",
+            "type": "gdb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/marcfs",
-            "args": [
-                "-d",
-                "~/remotes/mailru",
-                "-oauto_unmount,conffile=~/.config/marcfs/listrusample.json"
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        },
+            "target": "${workspaceFolder}/build/marcfs",
+            "arguments": "-d ~/remotes/mailru -oauto_unmount",
+            "preLaunchTask": "default build",
+            "postDebugTask": "unmount remote",
+            "cwd": "${workspaceRoot}",
+            "valuesFormatting": "prettyPrinters"
+        }
     ]
 }
