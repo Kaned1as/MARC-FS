@@ -81,7 +81,7 @@ void MarcFileNode::open(MarcRestClient *client, std::string path) {
 
 
 void MarcFileNode::flush(MarcRestClient *client, std::string path) {
-    // open is potentially network-upload operation, lock it
+    // flush is potentially network-upload operation, lock it
     std::unique_lock<std::mutex> guard(netMutex);
 
     // skip unchanged files

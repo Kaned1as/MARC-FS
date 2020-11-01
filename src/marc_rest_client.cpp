@@ -489,9 +489,9 @@ void MarcRestClient::upload(std::string remotePath, AbstractStorage &body, off_t
         source->offset += transferred;
         return transferred;
     });
-    std::string answer = performAction();
+    std::string hash = performAction();
 
-    addUploadedFile(filename, parentDir, answer, realSize);
+    addUploadedFile(filename, parentDir, hash, realSize);
 }
 
 void MarcRestClient::mkdir(std::string remotePath) {

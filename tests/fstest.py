@@ -14,8 +14,8 @@ HOMEDIR = os.path.expanduser('~')
 MARCFS_MOUNTDIR = HOMEDIR + '/marcfs-mount/'
 MARCFS_CACHEDIR = HOMEDIR + '/marcfs-cache/'
 
-MARCFS_USER = 'yoru.sulfur@list.ru'
-MARCFS_PASS = '5yKGLVT9QmQC'
+MARCFS_USER = os.getenv("MARCFS_TEST_USERNAME")
+MARCFS_PASS = os.getenv("MARCFS_TEST_PASSWORD")
 
 MARCFS_TEST_DIR = MARCFS_MOUNTDIR + 'test/'
 
@@ -164,7 +164,6 @@ class TestMarcfsFuseOperations(unittest.TestCase):
     def test_remove_nonexisting_file_fails(self):
         with self.assertRaises(OSError):
             os.unlink('some-nonexisting-file')
-
 
     def test_remove_empty_folder(self):
         dirname1 = self.test_create_folder()

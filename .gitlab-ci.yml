@@ -8,17 +8,10 @@ variables:
   GIT_SSL_NO_VERIFY: "true"
 
 stages:
-  - universal build
-  - universal fstest
-  - ubuntu build
-  - ubuntu fstest
-  - fedora build
-  - fedora fstest
-  - arch build
-  - arch fstest
+  - build
+  - fstest
 
 .binary_artifact: &binary_artifact
-#  expire_in: 1 day
   paths:
     - build/marcfs
 
@@ -37,8 +30,8 @@ stages:
 
 build on ubuntu:
   image: ubuntu:19.04
-  stage: ubuntu build
-  dependencies: []
+  stage: build
+  needs: []
   before_script: &common_compile_debian
     - apt-get update -qq
     - apt-get install -y -qq software-properties-common cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev
@@ -47,8 +40,8 @@ build on ubuntu:
 
 deb package for ubuntu:
   image: ubuntu:19.04
-  stage: ubuntu build
-  dependencies: []
+  stage: build
+  needs: []
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq software-properties-common git cmake g++ libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make fuse3
@@ -69,9 +62,12 @@ deb package for ubuntu:
 
 fstest on ubuntu:
   image: ubuntu:19.04
-  stage: ubuntu fstest
-  dependencies:
+  stage: fstest
+  needs:
     - build on ubuntu
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_UBUNTU_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_UBUNTU_TEST_PASSWORD
   before_script: &common_test_debian
     - apt-get update -qq
     - apt-get install -y -qq software-properties-common fuse3 libcurl4 libjsoncpp1 python3
@@ -83,8 +79,8 @@ fstest on ubuntu:
 
 static binary universal build:
   image: alpine
-  stage: universal build
-  dependencies: []
+  stage: build
+  needs: []
   before_script:
     - apk add g++ meson curl git pkgconf ninja make cmake perl linux-headers
       # jsoncpp
@@ -130,9 +126,12 @@ static binary universal build:
 
 static binary test:
   image: ubuntu # we should test static binary on another distro
-  stage: universal fstest
-  dependencies:
+  stage: fstest
+  needs:
     - static binary universal build
+  variables:
+    MARCFS_TEST_USERNAME: $MARCFS_UNIVERSAL_TEST_USERNAME
+    MARCFS_TEST_PASSWORD: $MARCFS_UNIVERSAL_TEST_PASSWORD
   before_script:
     - apt-get update --quiet && apt-get install python3 ca-certificates libcap2-bin fuse --yes
     - useradd --create-home fstest
@@ -144,18 +143,18 @@ static binary test:
 
 build on fedora:
   image: fedora
-  stage: fedora build
-  dependencies: []
-  before_script: 
+  stage: build
+  needs: []
+  before_script:
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel
   script: *common_script
   artifacts: *binary_artifact
 
 rpm package for fedora:
   image: fedora
-  stage: fedora build
-  dependencies: []
-  before_script: 
+  stage: build
+  needs: []
+  before_script:
     - yum -y install git-all cmake make gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel jemalloc-devel rpm-build
   script:
     - version=$(grep Version distribution/fedora/fuse-marcfs.spec | grep -oP "\d.*")
@@ -170,8 +169,8 @@ rpm package for fedora:
 
 fstest on fedora:
   image: fedora
-  stage: fedora fstest
-  dependencies:
+  stage: fstest
+  needs:
     - build on fedora
   before_script:
     - yum -y install fuse fuse-libs fuse3 fuse3-libs libcurl jsoncpp python
@@ -182,22 +181,22 @@ fstest on fedora:
   script:
     - su -c 'export NSS_STRICT_NOFORK=DISABLED; python3 fstest.py -v' - fstest
 
-  
+
 build on arch:
 # image: pritunl/archlinux # GPG signing errors
   image: archlinux/base
-  stage: arch build
-  dependencies: []
+  stage: build
+  needs: []
   before_script:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp
   script: *common_script
   artifacts: *binary_artifact
-  
+
 aur package for arch:
   image: archlinux/base
-  stage: arch build
-  dependencies: []
+  stage: build
+  needs: []
   before_script:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm git make cmake gcc fuse3 libcurl-gnutls jsoncpp fakeroot
@@ -212,8 +211,8 @@ aur package for arch:
 
 fstest on arch:
   image: archlinux/base
-  stage: arch fstest
-  dependencies:
+  stage: fstest
+  needs:
     - build on arch
   before_script:
     - pacman -Syu --noconfirm
