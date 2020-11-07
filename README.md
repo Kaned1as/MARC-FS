@@ -83,8 +83,8 @@ You can override its' location via `-o conffile=/path/to/config` option. Example
     "password": "password",
     "cachedir": "/absolute/path",
     "proxyurl": "http://localhost:3128",
-    "max-download-rate": "10000",
-    "max-upload-rate": "10000"
+    "max-download-rate": 10000,
+    "max-upload-rate": 10000
 }
 ```
 
