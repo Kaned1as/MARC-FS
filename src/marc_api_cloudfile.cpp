@@ -1,6 +1,6 @@
 /*****************************************************************************
  *
- * Copyright (c) 2018-2019, Oleg `Kanedias` Chernovskiy
+ * Copyright (c) 2018-2020, Oleg `Kanedias` Chernovskiy
  *
  * This file is part of MARC-FS.
  *

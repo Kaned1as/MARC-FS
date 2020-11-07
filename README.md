@@ -46,8 +46,8 @@ If you want your files on Mail.ru Cloud to be encrypted, you may use nested EncF
     $ cp whatever /path/to/decrypted/dir
     $ # at this point encrypted data will appear in Cloud Mail.ru storage
 
-If you want to use rsync to synchronize local and remote sides, use `--size-only` or `--modify-window=1` options. 
-Rsync compares mtime and size of file by default, but Mail.ru Cloud saves only seconds in mtime, 
+If you want to use rsync to synchronize local and remote sides, use `--size-only` or `--modify-window=1` options.
+Rsync compares mtime and size of file by default, but Mail.ru Cloud saves only seconds in mtime,
 which causes false-positives and reuploads of identical files:
 
     $ rsync -av --delete --modify-window=1 /path/to/local/folder/ ~/path/to/mount/folder
@@ -65,7 +65,7 @@ If you want to get a shared link to the file, you should create a file with spec
     $ cat picture.png.marcfs-link
     /path/to/file/pictire.png: https://cloud.mail.ru/public/LINK/ADDRESS
 
-Files with size > 2G will show up as series of shared links for each part. 
+Files with size > 2G will show up as series of shared links for each part.
 After getting the link special file can be safely removed.
 
 Notes
@@ -90,14 +90,14 @@ You can override its' location via `-o conffile=/path/to/config` option. Example
 
 #### Cache dir ####
 
-MARC-FS has two modes of operation. If no cachedir option is given, it stores all intermediate download/upload 
+MARC-FS has two modes of operation. If no cachedir option is given, it stores all intermediate download/upload
 data directly in memory. If you copy large files as HD movies or ISO files, it may eat up your RAM pretty quickly,
 so be careful. This one is useful if you want to copy your photo library to/from the cloud - this will actually take
 a lot less time than with second option.
 
 If cachedir option is given, MARC-FS stores all intermediate data there. It means, all files that are currently open
-in some process, copied/read or being edited - will have their data stored in this dir. This may sound like plenty 
-of space, but most software execute file operations sequentally, so in case of copying large media library on/from 
+in some process, copied/read or being edited - will have their data stored in this dir. This may sound like plenty
+of space, but most software execute file operations sequentally, so in case of copying large media library on/from
 the cloud you won't need more free space than largest one of the files occupies.
 
 #### Static build ####
@@ -113,7 +113,7 @@ This version can be used on any GNU/Linux distribution, but with some restrictio
 
 API references
 --------------
-- There is no official Mail.ru Cloud API reference, everything is reverse-engineered. You may refer to [Doxygen API comments](https://gitlab.com/Kanedias/MARC-FS/blob/master/marc_api.h) to grasp concept of what's going on.
+- There is no official Mail.ru Cloud API reference, everything is reverse-engineered. You may refer to [Doxygen API comments](src/marc_rest_client.h) to grasp concept of what's going on.
 - FUSE: [API overview](https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201109/homework/fuse/fuse_doc.html) - used to implement FS calls
 - cURL: [API overview](https://curl.haxx.se/docs/) - used to interact with Mail.ru Cloud REST API
 
@@ -129,7 +129,7 @@ Bugs & Known issues
 -------------------
 1. Temporary
   - Some issues may arise if you delete/move file that is currently copied or read. Please report such bugs here.
-  - big memory footprint due to 
+  - big memory footprint due to
       - SSL engine sessions - tend to become bigger with time (WIP)
       - heap fragmentation (WIP)
       - MADV_FREE - lazy memory reclaiming in Linux > 4.5 (not a bug actually)
@@ -141,13 +141,13 @@ Bugs & Known issues
 
 Contributions
 ------------
-You may create merge request or bug/enhancement issue right here on GitLab, or send formatted patch via e-mail. For details see CONTRIBUTING.md file in this repo. 
+You may create merge request or bug/enhancement issue right here on GitLab, or send formatted patch via e-mail. For details see CONTRIBUTING.md file in this repo.
 Audits from code style and security standpoint are also much appreciated.
 
 License
 -------
 
-    Copyright (C) 2016-2019  Oleg `Kanedias` Chernovskiy
+    Copyright (C) 2016-2020  Oleg `Kanedias` Chernovskiy
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
