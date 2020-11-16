@@ -111,7 +111,7 @@ static binary universal build:
     - cd contrib/openssl-1.1.1b
     - ./config --prefix=/usr no-shared
     - make -j$(nproc)
-    - make -j$(nproc) install
+    - make -j$(nproc) install_sw
       # zlib
     - cd $CI_PROJECT_DIR
     - curl https://zlib.net/zlib-1.2.11.tar.gz | tar -xz -C contrib
