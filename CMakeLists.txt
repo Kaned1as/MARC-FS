@@ -2,8 +2,12 @@ project(MARC-FS)
 cmake_minimum_required(VERSION 2.8)
 aux_source_directory(src SRC_LIST)
 
+# Options
+option(USE_JEMALLOC "Whether to use jemalloc" FALSE)
+option(STATIC_LINKING "Build a static binary" FALSE)
+option(TESTS "Compile tests" FALSE)
+
 # determine, whether we want a static binary
-set(STATIC_LINKING FALSE CACHE BOOL "Build a static binary?")
 if(STATIC_LINKING)
     set(BUILD_SHARED_LIBS OFF)
     set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
@@ -26,17 +30,25 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules")
 # internal libs and packages #
 #                            #
 
-
 # Curl C++ bindings
-add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
-include_directories(${CURLCPP_SOURCE_DIR}/include)
-list(APPEND REQUIRED_LIBS curlcpp)
-list(APPEND TEST_LIBS curlcpp)
+find_package(CURLCPP)
+if(NOT CURLCPP_FOUND)
+    add_subdirectory(contrib/curlcpp EXCLUDE_FROM_ALL)
+    list(APPEND REQUIRED_LIBS curlcpp)
+    list(APPEND TEST_LIBS curlcpp)
+    include_directories(${CURLCPP_SOURCE_DIR}/include)
+else(NOT CURLCPP_FOUND)
+    list(APPEND REQUIRED_LIBS ${CURLCPP_LIBRARIES})
+    list(APPEND TEST_LIBS ${CURLCPP_LIBRARIES})
+    include_directories(${CURLCPP_INCLUDE_DIR})
+endif(NOT CURLCPP_FOUND)
 
 # Googletest bindings
-add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
-include_directories(${gtest_SOURCE_DIR}/include)
-list(APPEND TEST_LIBS gtest_main)
+if(TESTS)
+    add_subdirectory(contrib/googletest/googletest EXCLUDE_FROM_ALL)
+    include_directories(${gtest_SOURCE_DIR}/include)
+    list(APPEND TEST_LIBS gtest_main)
+endif(TESTS)
 
 #                            #
 # external libs and packages #
@@ -66,27 +78,33 @@ if(STATIC_LINKING)
 endif()
 
 # JEMALLOC - optional
-find_package(JEMALLOC)
-if(JEMALLOC_FOUND)
-  include_directories(${JEMALLOC_INCLUDE_DIRS})
-else()
-    message(WARNING "jemalloc not found but highly recommended")
-endif()
+if(USE_JEMALLOC)
+    find_package(JEMALLOC)
+    if(JEMALLOC_FOUND)
+        include_directories(${JEMALLOC_INCLUDE_DIRS})
+    else()
+        message(WARNING "jemalloc not found but highly recommended")
+    endif()
+endif(USE_JEMALLOC)
 
 # first, run tests
 set(SRC_NO_MAIN ${SRC_LIST})
 list(REMOVE_ITEM SRC_NO_MAIN src/main.cpp)
-add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
-target_link_libraries(apitest ${TEST_LIBS})
-add_test(NAME rest_api_test COMMAND apitest)
+if(TESTS)
+    add_executable(apitest ${SRC_NO_MAIN} tests/apitest.cpp)
+    target_link_libraries(apitest ${TEST_LIBS})
+    add_test(NAME rest_api_test COMMAND apitest)
+endif(TESTS)
 
 # final binary
 add_executable(marcfs ${SRC_LIST})
 target_link_libraries(marcfs ${REQUIRED_LIBS})
 
 # optional libs
-if(JEMALLOC_FOUND)
-    target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
-endif()
+if(USE_JEMALLOC)
+    if(JEMALLOC_FOUND)
+        target_link_libraries(marcfs ${JEMALLOC_LIBRARIES})
+    endif()
+endif(USE_JEMALLOC)
 
 install(TARGETS marcfs RUNTIME DESTINATION bin)
