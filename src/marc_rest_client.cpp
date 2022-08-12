@@ -277,12 +277,12 @@ void MarcRestClient::openCloudPage() {
     if (cookieStore.get().size() <= cookiesSize) // didn't get any new cookies
         throw MailApiException("Failed to obtain cloud cookie, did you sign up to the cloud?");
 
-    size_t csrfTagStartPos = html.find("\"csrf\": \"");
+    size_t csrfTagStartPos = html.find("\"csrf\":\"");
     if (csrfTagStartPos == std::string::npos) {
         throw MailApiException("Couldn't find CSRF token in cloud page");
     }
 
-    size_t csrfQuoteStartPos = csrfTagStartPos + 9;
+    size_t csrfQuoteStartPos = csrfTagStartPos + 8;
     size_t csrfQuoteEndPos = html.find("\"", csrfQuoteStartPos);
     csrfToken = html.substr(csrfQuoteStartPos, csrfQuoteEndPos - csrfQuoteStartPos);
 }
