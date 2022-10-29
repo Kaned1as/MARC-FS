@@ -89,13 +89,13 @@ MarcRestClient::MarcRestClient()
 
 MarcRestClient::MarcRestClient(MarcRestClient &toCopy)
     : restClient(std::make_unique<curl::curl_easy>(*toCopy.restClient.get())), // copy easy handle
-      cookieStore(*restClient),                 // cokie_store is not copyable, init in body
+      cookieStore(*restClient),                             // cokie_store is not copyable, init in body
       proxyUrl(toCopy.proxyUrl),
-      maxDownloadRate(toCopy.maxDownloadRate),
       maxUploadRate(toCopy.maxUploadRate),
+      maxDownloadRate(toCopy.maxDownloadRate),
       authAccount(toCopy.authAccount),                      // copy account from other one
-      csrfToken(toCopy.csrfToken),
-      actToken(toCopy.actToken) {               // copy auth token from other one
+      actToken(toCopy.actToken),                            // copy auth token from other one
+      csrfToken(toCopy.csrfToken) {
     for (const auto &c : toCopy.cookieStore.get()) {
         restClient->add<CURLOPT_COOKIELIST>(c.data());
     }
@@ -140,7 +140,7 @@ std::string MarcRestClient::performAction(curl::curl_header *forced_headers) {
     std::ostringstream stream;
     curl_ios<std::ostringstream> writer(stream);
 
-    curl_header header;
+    curl::curl_header header;
     if (forced_headers) {
         // we have forced headers, override defaults with them
         header = *forced_headers;
@@ -188,7 +188,7 @@ std::string MarcRestClient::performAction(curl::curl_header *forced_headers) {
 }
 
 void MarcRestClient::performGet(AbstractStorage &target) {
-    curl_header header;
+    curl::curl_header header;
     header.add("Accept: */*");
     header.add("Origin: " + CLOUD_DOMAIN);
 
@@ -308,7 +308,7 @@ void MarcRestClient::authenticate() {
     restClient->add<CURLOPT_URL>(AUTH_ENDPOINT.data());
     restClient->add<CURLOPT_HTTPPOST>(form.get());
 
-    curl_header force_main_domain;
+    curl::curl_header force_main_domain;
     force_main_domain.add("Accept: */*");
     force_main_domain.add("Origin: " + MAIN_DOMAIN);
     force_main_domain.add("Referer: " + MAIN_DOMAIN);

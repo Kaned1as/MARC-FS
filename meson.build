@@ -22,17 +22,19 @@ extra_cpp_flags += ['-D_FILE_OFFSET_BITS=64', '-DFUSE_USE_VERSION=35']
 
 # subprojects
 cmake = import('cmake')
+cmake_options = cmake.subproject_options()
+
 curlcpp_proj = cmake.subproject('curlcpp')
 curlcpp_dep = curlcpp_proj.dependency('curlcpp')
 googletest_proj = cmake.subproject('googletest')
-googletest_dep = googletest_proj.dependency('gtest_main')
+googletest_main = googletest_proj.dependency('gtest_main')
+googletest_lib = googletest_proj.dependency('gtest')
 
-marcfs_src = [
+marcfs_lib_src = [
   'src/abstract_storage.cpp',
   'src/account.cpp',
   'src/file_storage.cpp',
   'src/fuse_hooks.cpp',
-  'src/main.cpp',
   'src/marc_api_cloudfile.cpp',
   'src/marc_api_shard.cpp',
   'src/marc_dir_node.cpp',
@@ -44,9 +46,20 @@ marcfs_src = [
   'src/object_pool.cpp',
   'src/utils.cpp'
 ]
+
+marcfs_src = marcfs_lib_src + ['src/main.cpp']
 executable('marcfs', marcfs_src,
   dependencies: [fuse3_dep, curlcpp_dep, libcurl_dep, jsoncpp_dep],
   cpp_args: extra_cpp_flags,
   link_args: extra_link_args,
   install: true
 )
+
+apitest_src = marcfs_lib_src + ['tests/apitest.cpp']
+apitest = executable('apitest', apitest_src,
+  dependencies: [fuse3_dep, curlcpp_dep, libcurl_dep, jsoncpp_dep, googletest_lib, googletest_main],
+  cpp_args: extra_cpp_flags,
+  link_args: extra_link_args,
+  install: false
+)
+test('MARC-FS API test', apitest)
