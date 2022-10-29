@@ -22,7 +22,6 @@ extra_cpp_flags += ['-D_FILE_OFFSET_BITS=64', '-DFUSE_USE_VERSION=35']
 
 # subprojects
 cmake = import('cmake')
-cmake_options = cmake.subproject_options()
 
 curlcpp_proj = cmake.subproject('curlcpp')
 curlcpp_dep = curlcpp_proj.dependency('curlcpp')
