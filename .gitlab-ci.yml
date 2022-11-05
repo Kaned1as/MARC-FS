@@ -47,19 +47,24 @@ deb package for ubuntu:
   needs: []
   variables:
     DEBIAN_FRONTEND: noninteractive
+    DEB_BUILD_OPTIONS: nocheck
+    DEBFULLNAME: Oleg (Kanedias) Chernovskiy
+    DEBEMAIL: kanedias@gmx.net
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq git g++ meson cmake pkg-config libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev dh-make
+    - apt-get install -y -qq git g++ meson cmake pkg-config
+                             libfuse3-dev libcurl4-openssl-dev libjsoncpp-dev
+                             dh-make
   script:
-    - export DEBFULLNAME="Oleg (Kanedias) Chernovskiy"
-    - export DEBEMAIL="kanedias@keemail.me"
-    - "cmake . -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_INSTALL_PREFIX=/usr"
-    - "dh_make --packagename marcfs_0.6 --copyright gpl3 --single --createorig --yes"
+    # create Debian build tree
+    - dh_make -p marcfs_0.8.1 --createorig --single --yes --copyright gpl3
+    # customize package details
     - "sed -E -i 's|^Section: .*|Section: otherosfs|g' debian/control"
     - "sed -E -i 's|^Homepage: .*|Homepage: https://gitlab.com/Kanedias/MARC-FS|g' debian/control"
-    - "sed -E -i 's|^Depends: (.*)|Depends: \\1, fuse3|g' debian/control"
+    - "sed -E -i 's|^Description: .*|Description: Mail.ru Cloud filesystem written for FUSE|g' debian/control"
     - cp README.md debian/README.Debian
-    - dpkg-buildpackage -us -uc -j$(nproc)
+    # build package
+    - dpkg-buildpackage -rfakeroot --unsigned-source --unsigned-changes --build=binary
     - cp ../*.deb .
   artifacts:
     paths:
@@ -170,10 +175,12 @@ rpm package for fedora:
                      fuse3-devel libcurl-devel jsoncpp-devel jemalloc-devel
                      rpm-build
   script:
+    # create RPM build tree
     - version=$(grep Version distribution/fedora/fuse-marcfs.spec | grep -oP "\d.*")
     - tar --transform "s|^|fuse-marcfs-$version/|g" -cvaf fuse-marcfs-$version.tar.zst *
     - mkdir -pv ~/rpmbuild/{RPMS,SRPMS,BUILD,SOURCES,SPECS,tmp}
     - mv -v fuse-marcfs-$version.tar.zst ~/rpmbuild/SOURCES
+    # build RPM package
     - rpmbuild -ba distribution/fedora/fuse-marcfs.spec
     - cp -v /root/rpmbuild/RPMS/*/*.rpm .
   artifacts:

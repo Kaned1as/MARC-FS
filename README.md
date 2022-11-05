@@ -27,14 +27,14 @@ Features
 
 Installation & Usage
 --------------------
-You should have cmake and g++ with C++17 support at hand.
-MARC-FS also requires `libfuse` (obviously), `libcurl` (min 7.34) and `pthread` libraries. Once you have all this, do as usual:
+You should have meson, cmake and g++ with C++17 support at hand.
+MARC-FS also requires `libfuse` (obviously), `libcurl` (min 7.34) and `jsoncpp` libraries. Once you have all this, do as usual:
 
     $ git clone --recursive https://gitlab.com/Kanedias/MARC-FS.git
     $ cd MARC-FS
-    $ mkdir build
-    $ cd build && cmake ..
-    $ make
+    $ mkdir -pv build
+    $ meson setup --buildtype=release --prefix=/usr build .
+    $ meson compile --jobs=$(nproc) -C build
     $ # here goes the step where you actually go and register on mail.ru website to obtain cloud storage and auth info
     $ ./marcfs /path/to/mount/folder -o username=your.email@mail.ru,password=your.password,cachedir=/path/to/cache
 
