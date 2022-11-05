@@ -166,12 +166,14 @@ rpm package for fedora:
   stage: build
   needs: []
   before_script:
-    - yum -y install git-all meson cmake pkg-config gcc-c++ fuse3-devel libcurl-devel jsoncpp-devel jemalloc-devel rpm-build
+    - dnf -y install git meson cmake pkgconf-pkg-config gcc-c++
+                     fuse3-devel libcurl-devel jsoncpp-devel jemalloc-devel
+                     rpm-build
   script:
     - version=$(grep Version distribution/fedora/fuse-marcfs.spec | grep -oP "\d.*")
-    - tar --transform "s|^|fuse-marcfs-$version/|g" -cvaf fuse-marcfs-$version.tar.bz2 *
+    - tar --transform "s|^|fuse-marcfs-$version/|g" -cvaf fuse-marcfs-$version.tar.zst *
     - mkdir -pv ~/rpmbuild/{RPMS,SRPMS,BUILD,SOURCES,SPECS,tmp}
-    - mv -v fuse-marcfs-$version.tar.bz2 ~/rpmbuild/SOURCES
+    - mv -v fuse-marcfs-$version.tar.zst ~/rpmbuild/SOURCES
     - rpmbuild -ba distribution/fedora/fuse-marcfs.spec
     - cp -v /root/rpmbuild/RPMS/*/*.rpm .
   artifacts:
