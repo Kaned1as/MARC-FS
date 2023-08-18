@@ -22,6 +22,7 @@
 #define CLOUDFILE_H
 
 #include <string>
+#include <cstdint>
 
 namespace Json {
     class Value;
